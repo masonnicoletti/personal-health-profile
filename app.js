@@ -1,0 +1,798 @@
+/* Personal Health Profile: form app */
+(function () {
+  const PHP = window.PHP;
+  const KEY = 'php.profile.v1';
+  const $ = (s, r = document) => r.querySelector(s);
+  let seq = 0;
+
+  // Tiny element builder
+  function h(tag, attrs = {}, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat()) {
+      if (kid == null || kid === false || kid === '') continue;
+      el.append(kid.nodeType ? kid : document.createTextNode(kid));
+    }
+    return el;
+  }
+  const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+  const plural = (w, n) => (n === 1 ? w : /is$/.test(w) ? w.replace(/is$/, 'es') : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + 'ies' : w + 's');
+
+  /* ---------- State ---------- */
+  const blank = () => ({ v: 2, data: {}, added: [], open: { basic: true } });
+  function normalize(o) {
+    if (!o || typeof o !== 'object' || !o.data || typeof o.data !== 'object') throw new Error('Not a health profile');
+    const open = o.open && typeof o.open === 'object' ? o.open : {};
+    if (open.doctors || open.formerdoctors) open.providers = true;
+    if (open.medhistory) open.meds = true;
+    return {
+      v: 2,
+      data: PHP.migrate(o.data),
+      added: Array.isArray(o.added) ? o.added.filter((id) => (PHP.sectionById(id) || {}).optional) : [],
+      open,
+    };
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) return normalize(JSON.parse(raw));
+    } catch (e) {
+      /* fall through to a blank profile */
+    }
+    return blank();
+  }
+
+  let state = load();
+  PHP.getState = () => state;
+  const editing = new Set(); // entry ids currently open for editing (not saved)
+
+  let saveTimer;
+  let dirty = false;
+  function save() {
+    dirty = true;
+    status('Saving…');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, 400);
+  }
+  function flush() {
+    clearTimeout(saveTimer);
+    if (!dirty) return;
+    dirty = false;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+      status('Saved');
+    } catch (e) {
+      status('Could not save on this device');
+    }
+  }
+  const status = (t) => ($('#saveStatus').textContent = t);
+  window.addEventListener('pagehide', flush);
+  // Another tab saved changes: pick them up unless this tab has unsaved edits
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY || dirty || !e.newValue) return;
+    try {
+      state = normalize(JSON.parse(e.newValue));
+      editing.clear();
+      renderAll();
+    } catch (err) {
+      /* ignore unreadable data */
+    }
+  });
+
+  function sd(id) {
+    const d = state.data[id] || (state.data[id] = {});
+    if (!d.values || typeof d.values !== 'object') d.values = {};
+    if (!d.lists || typeof d.lists !== 'object') d.lists = {};
+    return d;
+  }
+  const listArr = (id, key) => {
+    const d = sd(id);
+    return d.lists[key] || (d.lists[key] = []);
+  };
+  const active = () => PHP.SECTIONS.filter((s) => !s.optional || state.added.includes(s.id));
+  const hasAnyData = () => PHP.SECTIONS.some((s) => PHP.sectionHasData(s, state.data[s.id]));
+
+  /* ---------- Undo ---------- */
+  let undoSnap = null;
+  const snapshot = () => (undoSnap = JSON.stringify(state));
+  function undo() {
+    if (!undoSnap) return;
+    state = normalize(JSON.parse(undoSnap));
+    undoSnap = null;
+    editing.clear();
+    save();
+    renderAll();
+    hideToast();
+  }
+
+  let toastEl, toastTimer;
+  function toast(msg, canUndo) {
+    hideToast();
+    toastEl = h('div', { class: 'toast', role: 'status' }, h('span', { text: msg }), canUndo && h('button', { type: 'button', text: 'Undo', onclick: undo }));
+    document.body.append(toastEl);
+    toastTimer = setTimeout(hideToast, canUndo ? 10000 : 4000);
+  }
+  function hideToast() {
+    clearTimeout(toastTimer);
+    if (toastEl) toastEl.remove();
+    toastEl = null;
+  }
+
+  /* ---------- Fields ---------- */
+  function fieldGrid(fields, obj, changed, autofill) {
+    const grid = h('div', { class: 'grid' });
+    const els = [];
+    const byKey = {};
+    for (const f of fields) {
+      const el = field(f, obj, () => onField(f.k));
+      grid.append(el);
+      els.push([f, el]);
+      byKey[f.k] = el;
+    }
+    function onField(k) {
+      const out = autofill && autofill(obj, k);
+      if (out)
+        for (const [kk, v] of Object.entries(out)) {
+          obj[kk] = v;
+          if (byKey[kk] && byKey[kk].setVal) byKey[kk].setVal(v);
+        }
+      refresh();
+      changed();
+    }
+    function refresh() {
+      for (const [f, el] of els) el.hidden = f.showIf ? !f.showIf(obj) : false;
+    }
+    refresh();
+    return grid;
+  }
+
+  function field(f, obj, changed) {
+    const id = 'f' + ++seq;
+    const wrap = h('div', { class: 'f ' + (f.w || 'full') + (f.type === 'check' ? ' checkf' : '') });
+    const set = (v) => {
+      obj[f.k] = v;
+      changed();
+    };
+
+    if (f.type === 'check') {
+      const cb = h('input', { type: 'checkbox', id });
+      cb.checked = f.defaultOn ? obj[f.k] !== false : !!obj[f.k];
+      cb.addEventListener('change', () => set(cb.checked));
+      wrap.append(h('label', { class: 'check', for: id }, cb, f.label));
+      return wrap;
+    }
+    if (f.type === 'date') {
+      wrap.append(h('span', { class: 'lbl', id: id + 'l', text: f.label }), dateInput(obj[f.k], set, id + 'l'));
+      return wrap;
+    }
+    if (f.type === 'checklist') return checklist(f, obj, changed, wrap, id);
+
+    wrap.append(h('label', { for: id, text: f.label }));
+    let input;
+    let other = null;
+    if (f.type === 'long') {
+      input = h('textarea', { id, rows: '2', placeholder: f.ph });
+    } else if (f.type === 'select') {
+      const opts = typeof f.opts === 'function' ? f.opts() : f.opts;
+      input = h('select', { id }, h('option', { value: '', text: 'Choose' }), opts.map((o) => h('option', { value: o, text: o })));
+      const v = obj[f.k];
+      if (v && !opts.includes(v)) input.append(h('option', { value: v, text: v }));
+      if (opts.includes('Other')) {
+        other = h('input', { type: 'text', class: 'other-input', placeholder: 'Please specify', 'aria-label': f.label + ', other' });
+        other.value = obj[f.k + 'Other'] || '';
+        other.addEventListener('input', () => {
+          obj[f.k + 'Other'] = other.value;
+          changed();
+        });
+      }
+    } else if (f.type === 'phone') {
+      input = h('input', { type: 'tel', id, inputmode: 'tel', placeholder: '(555) 555-5555', autocomplete: 'off' });
+    } else {
+      input = h('input', { type: 'text', id, placeholder: f.ph, inputmode: f.inputmode, maxlength: f.maxlength && String(f.maxlength) });
+      const sugg = f.suggest ? f.suggest().filter((s) => s !== obj[f.k]) : [];
+      if (sugg.length) {
+        const lid = id + 'list';
+        input.setAttribute('list', lid);
+        input.setAttribute('autocomplete', 'off');
+        wrap.append(h('datalist', { id: lid }, sugg.map((s) => h('option', { value: s }))));
+      }
+    }
+    input.value = obj[f.k] || '';
+
+    if (f.type === 'select') {
+      const sync = () => {
+        input.classList.toggle('empty', !input.value);
+        if (other) other.hidden = input.value !== 'Other';
+      };
+      sync();
+      input.addEventListener('change', () => {
+        sync();
+        set(input.value);
+        if (other && !other.hidden) other.focus();
+      });
+      wrap.setVal = (v) => {
+        input.value = v;
+        sync();
+      };
+    } else if (f.type === 'phone') {
+      phoneBehavior(input, set);
+      wrap.setVal = (v) => (input.value = PHP.fmtPhone(v));
+    } else {
+      input.addEventListener('input', () => set(input.value));
+      wrap.setVal = (v) => (input.value = v);
+    }
+    wrap.append(input);
+    if (other) wrap.append(other);
+    return wrap;
+  }
+
+  // Formats as (XXX) XXX-XXXX while typing, keeping the cursor in place
+  function phoneBehavior(input, set) {
+    const apply = (raw, digitsBefore) => {
+      const f = PHP.fmtPhone(raw);
+      input.value = f;
+      let i = 0;
+      for (let n = 0; i < f.length && n < digitsBefore; i++) if (/\d/.test(f[i])) n++;
+      if (document.activeElement === input) input.setSelectionRange(i, i);
+      set(f);
+    };
+    input.addEventListener('input', () => {
+      const pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+      apply(input.value, input.value.slice(0, pos).replace(/\D/g, '').length);
+    });
+    // Backspace right after "(", ")", " " or "-" deletes the digit before it
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Backspace' || input.selectionStart !== input.selectionEnd) return;
+      const c = input.selectionStart;
+      let p = c;
+      while (p > 0 && /\D/.test(input.value[p - 1])) p--;
+      if (p === c || p === 0) return;
+      e.preventDefault();
+      const raw = input.value.slice(0, p - 1) + input.value.slice(c);
+      apply(raw, input.value.slice(0, p - 1).replace(/\D/g, '').length);
+    });
+  }
+
+  // A set of checkboxes; checking one opens a short text box for details
+  function checklist(f, obj, changed, wrap, id) {
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-labelledby', id + 'l');
+    wrap.append(h('span', { class: 'lbl', id: id + 'l', text: f.label }));
+    const box = h('div', { class: 'checklist' });
+    for (const it of f.items) {
+      const cid = 'f' + ++seq;
+      const cb = h('input', { type: 'checkbox', id: cid });
+      cb.checked = obj[it.k] === true;
+      const note = h('input', { type: 'text', class: 'cl-note', placeholder: 'Details', 'aria-label': it.label + ', details' });
+      note.value = obj[it.k + 'Note'] || '';
+      note.hidden = !cb.checked;
+      cb.addEventListener('change', () => {
+        obj[it.k] = cb.checked;
+        note.hidden = !cb.checked;
+        if (cb.checked) note.focus();
+        changed();
+      });
+      note.addEventListener('input', () => {
+        obj[it.k + 'Note'] = note.value;
+        changed();
+      });
+      box.append(h('div', { class: 'cl-item' }, h('label', { class: 'check', for: cid }, cb, it.label), note));
+    }
+    wrap.append(box);
+    return wrap;
+  }
+
+  // One consistent date entry everywhere: MM / DD / YYYY, any part may be left blank.
+  function dateInput(val, set, labelId) {
+    const p = PHP.parseDate(val);
+    const mk = (cls, ph, len, v, aria) => {
+      const i = h('input', { type: 'text', class: cls, inputmode: 'numeric', maxlength: String(len), placeholder: ph, 'aria-label': aria });
+      i.value = v;
+      return i;
+    };
+    const m = mk('mm', 'MM', 2, p.m, 'Month');
+    const d = mk('dd', 'DD', 2, p.d, 'Day');
+    const y = mk('yyyy', 'YYYY', 4, p.y, 'Year');
+    const parts = [m, d, y];
+    const check = () => {
+      m.classList.toggle('bad', m.value !== '' && (+m.value < 1 || +m.value > 12) && m.value !== '0');
+      d.classList.toggle('bad', d.value !== '' && (+d.value < 1 || +d.value > 31) && d.value !== '0');
+      y.classList.toggle('bad', y.value.length === 4 && (+y.value < 1900 || +y.value > 2100));
+    };
+    const emit = () => {
+      check();
+      set(PHP.joinDate(y.value, m.value, d.value));
+    };
+    parts.forEach((inp, i) => {
+      inp.addEventListener('input', () => {
+        inp.value = inp.value.replace(/\D/g, '');
+        const full = inp.value.length === +inp.maxLength || (inp === m && +inp.value > 1) || (inp === d && +inp.value > 3);
+        if (full && inp !== y && document.activeElement === inp) {
+          if (inp.value.length === 1) inp.value = '0' + inp.value;
+          parts[i + 1].focus();
+          parts[i + 1].select();
+        }
+        emit();
+      });
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !inp.value && parts[i - 1]) {
+          e.preventDefault();
+          parts[i - 1].focus();
+        } else if ((e.key === '/' || e.key === '-' || e.key === '.') && parts[i + 1]) {
+          e.preventDefault();
+          parts[i + 1].focus();
+        }
+      });
+      inp.addEventListener('blur', () => {
+        if (inp !== y && inp.value.length === 1 && inp.value !== '0') {
+          inp.value = '0' + inp.value;
+          emit();
+        }
+      });
+    });
+    check();
+    return h('div', { class: 'date', role: 'group', 'aria-labelledby': labelId }, m, d, y);
+  }
+
+  /* ---------- Sections ---------- */
+  function entriesWithData(sec) {
+    return (sd(sec.id).lists[sec.list.key] || []).filter((e) => PHP.entryHasData(sec.list, e));
+  }
+  function count(sec) {
+    if (!sec.list || (sec.list.noneLabel && sd(sec.id).none)) return 0;
+    return entriesWithData(sec).length;
+  }
+  function summary(sec) {
+    const d = sd(sec.id);
+    if (sec.kind === 'profile') return sec.id === 'basic' ? PHP.fullName(d.values) : '';
+    const L = sec.list;
+    if (L.noneLabel && d.none) return L.noneLabel;
+    const es = entriesWithData(sec);
+    if (!es.length) return '';
+    if (L.split) {
+      const cur = es.filter(PHP.isCurrent).length;
+      const past = es.length - cur;
+      return [cur && cur + ' current', past && past + ' past'].filter(Boolean).join(' · ');
+    }
+    return es.length + ' ' + plural(L.itemLabel, es.length);
+  }
+  function onChange(sec) {
+    save();
+    const s = document.querySelector('#sec-' + sec.id + ' .summary');
+    if (s) s.textContent = summary(sec);
+    renderNav();
+  }
+
+  function infoEl(sec) {
+    const pid = 'info-' + sec.id;
+    const wrap = h('div', { class: 'info' });
+    const btn = h('button', {
+      type: 'button',
+      class: 'info-btn',
+      'aria-expanded': 'false',
+      'aria-controls': pid,
+      'aria-label': "What's this?",
+      text: '?',
+      onclick: (ev) => {
+        ev.stopPropagation();
+        const on = !wrap.classList.contains('pinned');
+        closeInfos();
+        wrap.classList.toggle('pinned', on);
+        btn.setAttribute('aria-expanded', String(on));
+      },
+    });
+    const panel = h(
+      'div',
+      { class: 'info-panel', id: pid, role: 'note' },
+      h('p', {}, h('b', { text: 'What to add' }), sec.info.what),
+      h('p', {}, h('b', { text: 'Why it helps' }), sec.info.why)
+    );
+    wrap.append(btn, panel);
+    return wrap;
+  }
+  function closeInfos() {
+    document.querySelectorAll('.info.pinned').forEach((w) => {
+      w.classList.remove('pinned');
+      w.querySelector('.info-btn').setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function setOpen(id, open) {
+    state.open[id] = open;
+    const el = document.getElementById('sec-' + id);
+    if (el) {
+      el.classList.toggle('open', open);
+      const t = el.querySelector('.sec-toggle');
+      t.setAttribute('aria-expanded', String(open));
+    }
+    save();
+  }
+
+  function renderSection(sec) {
+    const d = sd(sec.id);
+    const kind = sec.list ? sec.list.kind : 'profile';
+    const open = !!state.open[sec.id];
+    const bodyId = 'body-' + sec.id;
+
+    const toggle = h(
+      'button',
+      { type: 'button', class: 'sec-toggle', 'aria-expanded': String(open), 'aria-controls': bodyId, onclick: () => setOpen(sec.id, !state.open[sec.id]) },
+      h('h2', { text: sec.title }),
+      h('span', { class: 'summary', text: summary(sec) })
+    );
+    const head = h('div', { class: 'sec-head' }, toggle, sec.info && infoEl(sec));
+
+    const body = h('div', { class: 'sec-body', id: bodyId });
+    if (sec.kind === 'profile') body.append(fieldGrid(sec.fields, d.values, () => onChange(sec)));
+    else body.append(listBlock(sec, sec.list));
+    if (sec.optional) {
+      body.append(
+        h('div', { class: 'entry-actions section-remove' }, h('span', { class: 'spacer' }), h('button', { type: 'button', class: 'link danger', text: 'Remove this section', onclick: () => removeSection(sec) }))
+      );
+    }
+
+    return h('section', { class: 'card sec ' + kind + (open ? ' open' : ''), id: 'sec-' + sec.id, 'aria-label': sec.title }, head, body);
+  }
+
+  function listBlock(sec, L) {
+    const d = sd(sec.id);
+    const arr = listArr(sec.id, L.key);
+    const block = h('div', { class: 'list-block' });
+
+    if (L.noneLabel) {
+      const id = 'f' + ++seq;
+      const cb = h('input', { type: 'checkbox', id });
+      cb.checked = !!d.none;
+      cb.addEventListener('change', () => {
+        d.none = cb.checked;
+        save();
+        rerender(sec.id);
+        $('#sec-' + sec.id + ' .list-block input[type=checkbox]').focus();
+      });
+      block.append(h('label', { class: 'check', for: id }, cb, L.noneLabel));
+      if (d.none) return block;
+    }
+
+    const addBtn = h('button', { type: 'button', class: 'btn add', text: '+ Add ' + L.itemLabel, onclick: () => addEntry(sec, L) });
+    const group = (items) => h('div', { class: 'entries' }, items.map((e) => entryEl(sec, L, e)));
+
+    if (L.split) {
+      // Being edited stays where it is until Done, so the card does not jump mid-edit
+      const cur = arr.filter((e) => PHP.isCurrent(e) || editing.has(e.id));
+      const old = PHP.splitEntries(L, arr).past.filter((e) => !editing.has(e.id));
+      if (cur.length) block.append(group(cur));
+      else if (!old.length) block.append(h('p', { class: 'empty-note', text: 'None added yet.' }));
+      block.append(addBtn);
+      if (old.length) block.append(h('h3', { class: 'group-title', text: L.pastTitle }), group(old));
+      return block;
+    }
+
+    const items = PHP.sortEntries(L, arr);
+    if (items.length) block.append(group(items));
+    else if (!L.noneLabel) block.append(h('p', { class: 'empty-note', text: 'None added yet.' }));
+    block.append(addBtn);
+    return block;
+  }
+
+  function entryEl(sec, L, e) {
+    const isEd = editing.has(e.id);
+    const title = PHP.entryTitle(L, e);
+    const sub = L.sub ? L.sub(e) : '';
+    const el = h('div', { class: 'entry' + (isEd ? ' editing' : ''), 'data-entry': e.id });
+
+    el.append(
+      h(
+        'div',
+        { class: 'entry-sum' },
+        h('div', { class: 'txt' }, h('div', { class: 't' + (title ? '' : ' placeholder'), text: title || 'Untitled ' + L.itemLabel }), sub && h('div', { class: 's', text: sub })),
+        h('button', {
+          type: 'button',
+          class: 'link edit',
+          text: 'Edit',
+          'aria-label': 'Edit ' + (title || L.itemLabel),
+          onclick: () => {
+            editing.add(e.id);
+            rerender(sec.id);
+            focusFirst(e.id);
+          },
+        })
+      )
+    );
+    if (!isEd) return el;
+
+    const edit = h('div', { class: 'entry-edit' });
+    edit.append(fieldGrid(L.fields, e, () => onChange(sec), L.autofill));
+    const actions = h('div', { class: 'entry-actions' }, h('button', { type: 'button', class: 'btn primary', text: 'Done', onclick: () => done(sec, L, e) }));
+
+    let panel = null;
+    const toggleMove = () => {
+      if (panel) {
+        panel.remove();
+        panel = null;
+        return;
+      }
+      const mv = { end: PHP.todayISO() };
+      panel = h(
+        'div',
+        { class: 'move-panel' },
+        h('p', { class: 'sub', text: 'Saves this to ' + L.historyName + ' as a permanent record.' }),
+        fieldGrid([{ k: 'end', label: L.endLabel, type: 'date', w: 'half' }], mv, () => {}),
+        h(
+          'div',
+          { class: 'entry-actions' },
+          h('button', { type: 'button', class: 'btn primary', text: 'Move', onclick: () => moveToHistory(sec, L, e, mv) }),
+          h('button', { type: 'button', class: 'link', text: 'Cancel', onclick: toggleMove })
+        )
+      );
+      edit.append(panel);
+      panel.querySelector('input').focus();
+    };
+
+    if (L.historyId) actions.append(h('button', { type: 'button', class: 'link', text: 'Move to ' + L.historyName, onclick: toggleMove }));
+    actions.append(h('span', { class: 'spacer' }), h('button', { type: 'button', class: 'link danger', text: 'Remove', onclick: () => removeEntry(sec, L, e) }));
+    edit.append(actions);
+    el.append(edit);
+    return el;
+  }
+
+  function focusFirst(entryId) {
+    const ed = document.querySelector(`[data-entry="${entryId}"] .entry-edit`);
+    const f = ed && ed.querySelector('input, select, textarea');
+    if (f) {
+      f.focus({ preventScroll: true });
+      f.closest('.entry').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
+  function rerender(id) {
+    const old = document.getElementById('sec-' + id);
+    const sec = PHP.sectionById(id);
+    if (old && sec) old.replaceWith(renderSection(sec));
+    renderNav();
+  }
+
+  /* ---------- Actions ---------- */
+  function addEntry(sec, L) {
+    const e = { id: uid() };
+    listArr(sec.id, L.key).push(e);
+    editing.add(e.id);
+    state.open[sec.id] = true;
+    save();
+    rerender(sec.id);
+    focusFirst(e.id);
+  }
+
+  function done(sec, L, e) {
+    editing.delete(e.id);
+    if (!PHP.entryHasData(L, e)) {
+      const arr = listArr(sec.id, L.key);
+      arr.splice(arr.indexOf(e), 1);
+    }
+    save();
+    rerender(sec.id);
+    const btn = document.querySelector(`[data-entry="${e.id}"] .edit`) || document.querySelector('#sec-' + sec.id + ' .btn.add');
+    if (btn) btn.focus({ preventScroll: true });
+  }
+
+  function removeEntry(sec, L, e) {
+    snapshot();
+    const arr = listArr(sec.id, L.key);
+    arr.splice(arr.indexOf(e), 1);
+    editing.delete(e.id);
+    save();
+    rerender(sec.id);
+    toast('Removed.', true);
+  }
+
+  function moveToHistory(sec, L, e, mv) {
+    snapshot();
+    const entry = { id: uid() };
+    for (const [from, to] of Object.entries(L.toHistory)) if (PHP.isFilled(e[from])) entry[to] = e[from];
+    if (PHP.isFilled(mv.end)) entry[L.endField] = mv.end;
+    const arr = listArr(sec.id, L.key);
+    arr.splice(arr.indexOf(e), 1);
+    editing.delete(e.id);
+    const hs = PHP.sectionById(L.historyId);
+    listArr(hs.id, hs.list.key).push(entry);
+    save();
+    rerender(sec.id);
+    rerender(hs.id);
+    toast('Moved to ' + L.historyName + '.', true);
+  }
+
+  function addSection(sec) {
+    state.added.push(sec.id);
+    state.open[sec.id] = true;
+    save();
+    renderAll();
+    const el = document.getElementById('sec-' + sec.id);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.querySelector('.sec-toggle').focus({ preventScroll: true });
+  }
+
+  function removeSection(sec) {
+    snapshot();
+    delete state.data[sec.id];
+    state.added = state.added.filter((id) => id !== sec.id);
+    save();
+    renderAll();
+    toast(sec.title + ' removed.', true);
+  }
+
+  function goTo(id) {
+    if (!state.open[id]) setOpen(id, true);
+    const el = document.getElementById('sec-' + id);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.querySelector('.sec-toggle').focus({ preventScroll: true });
+  }
+
+  /* ---------- Page chrome ---------- */
+  function renderNav() {
+    $('#nav').replaceChildren(
+      ...active().map((sec) => {
+        const c = count(sec);
+        return h('li', {}, h('button', { type: 'button', class: 'nav-link', 'data-sec': sec.id, onclick: () => goTo(sec.id) }, h('span', { text: sec.title }), c ? h('span', { class: 'count', text: String(c) }) : null));
+      })
+    );
+    spy();
+  }
+
+  function renderAdd() {
+    const opts = PHP.SECTIONS.filter((s) => s.optional && !state.added.includes(s.id));
+    $('#addSection').hidden = !opts.length;
+    $('#addGrid').replaceChildren(...opts.map((s) => h('button', { type: 'button', class: 'add-opt', onclick: () => addSection(s) }, h('b', { text: s.title }), h('span', { text: s.blurb }))));
+  }
+
+  function renderAll() {
+    $('#sections').replaceChildren(...active().map(renderSection));
+    renderNav();
+    renderAdd();
+  }
+
+  // Highlight the section currently in view
+  let spyQueued = false;
+  function spy() {
+    if (spyQueued) return;
+    spyQueued = true;
+    requestAnimationFrame(() => {
+      spyQueued = false;
+      let cur = null;
+      for (const el of document.querySelectorAll('.sec')) if (el.getBoundingClientRect().top < 180) cur = el.id.slice(4);
+      if (!cur) {
+        const first = document.querySelector('.sec');
+        cur = first && first.id.slice(4);
+      }
+      document.querySelectorAll('.nav-link').forEach((b) => b.classList.toggle('active', b.dataset.sec === cur));
+    });
+  }
+  window.addEventListener('scroll', spy, { passive: true });
+
+  // Backup menu
+  const menuBtn = $('#backupBtn');
+  const menuPanel = $('#backupMenu .menu-panel');
+  function closeMenu() {
+    menuPanel.hidden = true;
+    menuBtn.setAttribute('aria-expanded', 'false');
+  }
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menuPanel.hidden;
+    menuPanel.hidden = !open;
+    menuBtn.setAttribute('aria-expanded', String(open));
+    if (open) menuPanel.querySelector('button').focus();
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.info')) closeInfos();
+    if (!e.target.closest('#backupMenu')) closeMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeInfos();
+      if (!menuPanel.hidden) {
+        closeMenu();
+        menuBtn.focus();
+      }
+    }
+  });
+
+  function download(blob, name) {
+    const a = h('a', { href: URL.createObjectURL(blob), download: name });
+    document.body.append(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    }, 1000);
+  }
+
+  function replaceState(next, msg) {
+    snapshot();
+    state = next;
+    editing.clear();
+    save();
+    renderAll();
+    window.scrollTo({ top: 0 });
+    toast(msg, true);
+  }
+
+  $('#exportBtn').addEventListener('click', () => {
+    closeMenu();
+    flush();
+    const payload = JSON.stringify({ ...state, app: 'Personal Health Profile', exported: new Date().toISOString() }, null, 2);
+    download(new Blob([payload], { type: 'application/json' }), `health-profile-backup-${PHP.todayISO()}.json`);
+    toast('Backup file saved.');
+  });
+  $('#importBtn').addEventListener('click', () => {
+    closeMenu();
+    $('#importFile').click();
+  });
+  $('#importFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      replaceState(normalize(JSON.parse(await f.text())), 'Backup restored.');
+    } catch (err) {
+      toast('That file could not be read.');
+    }
+  });
+  $('#sampleBtn').addEventListener('click', () => {
+    closeMenu();
+    if (hasAnyData() && !confirm('Replace your information with sample data? You can undo this right after.')) return;
+    replaceState(normalize(PHP.sampleData()), 'Sample data loaded.');
+  });
+  $('#eraseBtn').addEventListener('click', () => {
+    closeMenu();
+    if (!confirm('Erase all information saved on this device?')) return;
+    replaceState(blank(), 'Everything erased.');
+  });
+
+  // PDF
+  const dlg = $('#pdfDialog');
+  $('#pdfBtn').addEventListener('click', () => {
+    flush();
+    const secs = active().filter((s) => PHP.sectionHasData(s, state.data[s.id]));
+    $('#pdfChoices').replaceChildren(
+      ...secs.map((s) => {
+        const id = 'pdf-' + s.id;
+        const cb = h('input', { type: 'checkbox', id, value: s.id });
+        cb.checked = true;
+        return h('label', { class: 'check', for: id }, cb, s.title);
+      })
+    );
+    $('#pdfEmpty').hidden = !!secs.length;
+    $('#pdfGo').disabled = !secs.length;
+    $('#pdfSelectAll').hidden = !secs.length;
+    dlg.showModal();
+  });
+  $('#pdfSelectAll').addEventListener('click', () => {
+    const cbs = [...document.querySelectorAll('#pdfChoices input')];
+    const all = cbs.every((c) => c.checked);
+    cbs.forEach((c) => (c.checked = !all));
+  });
+  $('#pdfGo').addEventListener('click', () => {
+    const ids = [...document.querySelectorAll('#pdfChoices input:checked')].map((c) => c.value);
+    if (!ids.length) return;
+    try {
+      PHP.buildPdf(state, ids);
+      dlg.close();
+    } catch (err) {
+      console.error(err);
+      toast('Could not create the PDF.');
+    }
+  });
+
+  /* ---------- Start ---------- */
+  renderAll();
+  PHP._debug = {
+    get state() {
+      return state;
+    },
+  };
+})();

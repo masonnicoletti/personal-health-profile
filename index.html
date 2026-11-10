@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Personal Health Profile</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1>Personal Health Profile</h1>
+      </div>
+      <div class="actions">
+        <span class="save-status" id="saveStatus" aria-live="polite"></span>
+        <div class="menu" id="backupMenu">
+          <button type="button" class="btn ghost" id="backupBtn" aria-haspopup="true" aria-expanded="false">Backup</button>
+          <div class="menu-panel" role="menu" hidden>
+            <button type="button" role="menuitem" id="exportBtn">Save a backup file</button>
+            <button type="button" role="menuitem" id="importBtn">Restore from backup</button>
+            <button type="button" role="menuitem" id="sampleBtn">Load sample data</button>
+            <button type="button" role="menuitem" class="danger" id="eraseBtn">Erase everything</button>
+          </div>
+        </div>
+        <button type="button" class="btn primary" id="pdfBtn">Download PDF</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidenav" aria-label="Sections">
+      <ul id="nav"></ul>
+    </nav>
+
+    <main id="main">
+      <div id="sections"></div>
+
+      <section class="add-section card" id="addSection">
+        <h2>Add a section</h2>
+        <div class="add-grid" id="addGrid"></div>
+      </section>
+
+      <p class="privacy">Saved only on this device. Nothing is sent anywhere. Keep a backup file in a safe place.</p>
+    </main>
+  </div>
+
+  <dialog id="pdfDialog" aria-labelledby="pdfTitle">
+    <form method="dialog" class="dialog-body">
+      <h2 id="pdfTitle">Download PDF</h2>
+      <p class="sub">Choose what to include.</p>
+      <div class="pdf-choices" id="pdfChoices"></div>
+      <p class="sub" id="pdfEmpty" hidden>Nothing entered yet.</p>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" id="pdfSelectAll">Select all</button>
+        <span class="spacer"></span>
+        <button value="cancel" class="btn ghost">Cancel</button>
+        <button type="button" class="btn primary" id="pdfGo">Download</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input type="file" id="importFile" accept="application/json,.json" hidden>
+
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="vendor/jspdf.plugin.autotable.min.js"></script>
+  <script src="schema.js"></script>
+  <script src="pdf.js"></script>
+  <script src="sample.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
