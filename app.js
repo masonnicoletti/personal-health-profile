@@ -36,6 +36,9 @@
     let added = Array.isArray(o.added) ? o.added.slice() : [];
     // "Vision, Hearing & Dental" became three sections: keep the ones that hold data
     if (added.includes('senses')) added = added.concat(['vision', 'hearing', 'dental'].filter((id) => data[id] && !added.includes(id)));
+    // Immunizations became an additional section: keep it for anyone who already has vaccines entered
+    const imm = PHP.sectionById('immunizations');
+    if (!added.includes('immunizations') && PHP.sectionHasData(imm, data.immunizations)) added.push('immunizations');
     return {
       v: 3,
       data,
@@ -795,15 +798,47 @@
       ...active().map((sec) => {
         const c = count(sec);
         return h('li', {}, h('button', { type: 'button', class: 'nav-link', 'data-sec': sec.id, onclick: () => goTo(sec.id) }, h('span', { text: sec.title }), c ? h('span', { class: 'count', text: String(c) }) : null));
-      })
+      }),
+      h(
+        'li',
+        { class: 'nav-more' },
+        h('button', {
+          type: 'button',
+          class: 'nav-link',
+          'data-sec': 'more',
+          text: 'Additional Sections',
+          onclick: () => {
+            const el = $('#addSection');
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const first = el.querySelector('.add-opt');
+            if (first) first.focus({ preventScroll: true });
+          },
+        })
+      )
     );
     spy();
   }
 
+  // Every optional section as a tile: tap to add it, or to jump to it once added
   function renderAdd() {
-    const opts = PHP.SECTIONS.filter((s) => s.optional && !state.added.includes(s.id));
-    $('#addSection').hidden = !opts.length;
-    $('#addGrid').replaceChildren(...opts.map((s) => h('button', { type: 'button', class: 'add-opt', onclick: () => addSection(s) }, h('b', { text: s.title }), h('span', { text: s.blurb }))));
+    const opts = PHP.SECTIONS.filter((s) => s.optional);
+    $('#addGrid').replaceChildren(
+      ...opts.map((s) => {
+        const added = state.added.includes(s.id);
+        return h(
+          'button',
+          {
+            type: 'button',
+            class: 'add-opt' + (added ? ' added' : ''),
+            'aria-label': (added ? 'Go to ' : 'Add ') + s.title,
+            onclick: () => (added ? goTo(s.id) : addSection(s)),
+          },
+          h('b', { text: s.title }),
+          h('span', { class: 'blurb', text: s.blurb }),
+          h('span', { class: 'state', text: added ? 'Added' : '+ Add' })
+        );
+      })
+    );
   }
 
   function renderAll() {
@@ -821,7 +856,7 @@
     requestAnimationFrame(() => {
       spyQueued = false;
       let cur = null;
-      for (const el of document.querySelectorAll('.sec')) if (el.getBoundingClientRect().top < 180) cur = el.id.slice(4);
+      for (const el of document.querySelectorAll('.sec, #addSection')) if (el.getBoundingClientRect().top < 180) cur = el.id === 'addSection' ? 'more' : el.id.slice(4);
       if (!cur) {
         const first = document.querySelector('.sec');
         cur = first && first.id.slice(4);
@@ -870,7 +905,11 @@
     sub.hidden = !has;
     const primary = $('#homePrimary');
     primary.textContent = has ? 'Update Profile' : 'Get Started';
-    primary.onclick = () => (has ? goForm() : startTour(true));
+    // New users: open the form first, then walk through the tutorial on top of it
+    primary.onclick = () => {
+      goForm();
+      if (!has) startTour(true);
+    };
     $('#homeSecondary').replaceChildren(
       ...(has ? [btn('ghost', 'Log Appointment', () => quickAdd('appointments')), btn('ghost', 'Add a Note', () => quickAdd('notes')), btn('ghost', 'Download PDF', openPdf)] : [])
     );
@@ -910,18 +949,18 @@
 
   const tour = $('#tourDialog');
   let tourStep = 0;
-  let tourThenForm = false;
+  let firstRun = false;
   function showStep() {
     const s = STEPS[tourStep];
     const last = tourStep === STEPS.length - 1;
     $('#tourCount').textContent = `${tourStep + 1} of ${STEPS.length}`;
     $('#tourTitle').textContent = s.title;
     $('#tourText').textContent = s.text;
-    $('#tourNext').textContent = last ? (tourThenForm ? 'Start' : 'Done') : 'Next';
+    $('#tourNext').textContent = last ? (firstRun ? 'Start' : 'Done') : 'Next';
   }
-  function startTour(thenForm) {
+  function startTour(first) {
     tourStep = 0;
-    tourThenForm = thenForm;
+    firstRun = first;
     showStep();
     tour.showModal();
     $('#tourNext').focus();
@@ -932,11 +971,6 @@
       showStep();
       $('#tourNext').focus();
     } else tour.close();
-  });
-  tour.addEventListener('close', () => {
-    if (!tourThenForm) return;
-    tourThenForm = false;
-    goForm();
   });
 
   $('#instrSteps').replaceChildren(...STEPS.concat(MORE_STEPS).map((s) => h('li', {}, h('b', { text: s.title }), h('p', { text: s.text }))));
@@ -1017,6 +1051,52 @@
   $('#tourBtn').addEventListener('click', () => {
     settings.close();
     startTour(false);
+  });
+
+  /* ---------- Share this site ---------- */
+  // Only the site's address is shared, never anything the person entered
+  const siteUrl = () => location.origin + location.pathname;
+  const SHARE_TEXT = 'Personal Health Profile: keep your health information in one place and bring it to appointments.';
+  const share = $('#shareDialog');
+  $('#shareBtn').addEventListener('click', () => {
+    settings.close();
+    const url = siteUrl();
+    const msg = `${SHARE_TEXT} ${url}`;
+    $('#shareUrl').value = url;
+    $('#shareText').href = 'sms:?&body=' + encodeURIComponent(msg);
+    $('#shareEmail').href = 'mailto:?subject=' + encodeURIComponent('Personal Health Profile') + '&body=' + encodeURIComponent(msg);
+    $('#shareFacebook').href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url);
+    $('#shareX').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(SHARE_TEXT) + '&url=' + encodeURIComponent(url);
+    $('#shareWhatsApp').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
+    $('#shareNative').hidden = !navigator.share; // phones: the device's own share menu covers every app
+    $('#shareCopy').textContent = 'Copy link';
+    share.showModal();
+  });
+  $('#shareNative').addEventListener('click', async () => {
+    try {
+      await navigator.share({ title: 'Personal Health Profile', text: SHARE_TEXT, url: siteUrl() });
+    } catch (err) {
+      /* closed without sharing */
+    }
+  });
+  $('#shareCopy').addEventListener('click', async () => {
+    const field = $('#shareUrl');
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(field.value);
+      copied = true;
+    } catch (err) {
+      field.select();
+      try {
+        copied = document.execCommand('copy');
+      } catch (err2) {
+        copied = false;
+      }
+    }
+    if (copied) {
+      $('#shareCopy').textContent = 'Copied';
+      setTimeout(() => ($('#shareCopy').textContent = 'Copy link'), 2500);
+    } else field.select(); // leave it selected so it can be copied by hand
   });
   $('#sampleBtn').addEventListener('click', async () => {
     settings.close();

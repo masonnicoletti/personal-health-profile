@@ -51,7 +51,7 @@ Scripts load in order from `index.html` and share one global namespace, `window.
   - Any `select` whose options include `'Other'` automatically gets a text box stored at `<key>Other`. Use `PHP.ov(obj, key)` to read the effective value.
   - Select `opts` can be a function (e.g. offices and providers come from the Providers section via `PHP.getState()`).
 - **List options:** `merge` combines several fields into one PDF column (names, addresses), and `autofill(entry, changedKey)` pre-fills fields (providers copy address and phone from a matching office).
-- **Order:** set by the `ORDER` array at the bottom of the section list; optional sections follow, and Notes & Questions is always last.
+- **Order:** set by the `ORDER` array at the bottom of the section list; optional sections (shown as tiles under "Additional Sections" until added) follow, and Notes & Questions is always last.
 - **Stored value formats:**
   - Dates: `"YYYY-MM-DD"`, where any part may be blank (`"2014--"`).
   - Height: `"ft-in"`.

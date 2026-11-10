@@ -24,12 +24,19 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // Order, with Notes & Questions last even after adding a section
   let order = await page.$$eval('.sec', (els) => els.map((e) => e.id.slice(4)));
-  ok(order.join() === 'basic,conditions,lifestyle,family,meds,surgeries,immunizations,allergies,providers,insurance,emergency,notes', 'section order: ' + order.join(','));
+  ok(order.join() === 'basic,conditions,lifestyle,family,meds,surgeries,allergies,providers,insurance,emergency,notes', 'section order: ' + order.join(','));
   await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.innerText.startsWith('Hearing')).click());
   order = await page.$$eval('.sec', (els) => els.map((e) => e.id.slice(4)));
   ok(order[order.length - 1] === 'notes' && order.includes('hearing'), 'Notes & Questions stays last after adding a section');
   const addable = await page.$$eval('.add-opt b', (bs) => bs.map((b) => b.textContent));
   ok(addable.includes('Vision') && addable.includes('Dental') && !addable.some((t) => /Vision, Hearing/.test(t)), 'Vision, Hearing and Dental are separate sections');
+  ok((await page.$eval('#addSection h2', (x) => x.textContent)) === 'Additional Sections' && addable.length === 10 && addable.includes('Immunizations'), 'Additional Sections shows all 10 optional sections');
+  const tiles = await page.$$eval('.add-opt', (ts) => ts.map((t) => { const r = t.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width), Math.round(r.height)]; }));
+  ok(new Set(tiles.map((t) => t[0])).size === 3 && tiles.every((t) => Math.abs(t[1] - t[2]) <= 1), 'tiles are squares, three across');
+  ok((await page.$eval('.add-opt.added', (t) => t.innerText)).includes('Added'), 'an added section is marked Added');
+  const navLast = await page.$$eval('#nav .nav-link', (ls) => ls[ls.length - 1].textContent);
+  ok(navLast === 'Additional Sections', 'side menu ends with Additional Sections');
+  await (await page.$('#addSection')).screenshot({ path: OUT + '/v6-additional-sections.png' });
 
   // Basic information
   const basic = await labels('#sec-basic');
@@ -98,8 +105,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok((await S()).data.meds.lists.main[0].name === 'Aspirin', 'typing starts in the first text box');
   await page.click('#sec-meds .entry.editing .btn.primary');
 
-  // Immunizations: dropdown, no "Given at"
-  await open('immunizations');
+  // Immunizations: an additional section with a vaccine dropdown and "Administered at"
+  ok(!(await page.$('#sec-immunizations')), 'Immunizations is not shown until added');
+  await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.innerText.startsWith('Immunizations')).click());
+  ok(!!(await page.$('#sec-immunizations')) && (await page.$eval('#sec-immunizations', (s) => s.classList.contains('open'))), 'adding Immunizations opens it');
   await page.click('#sec-immunizations .btn.add');
   const vopts = await page.$$eval('#sec-immunizations .entry.editing select option', (os) => os.map((o) => o.value));
   const ifields = await labels('#sec-immunizations .entry.editing');
@@ -213,6 +222,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(m.providers.lists.main[0].street === '9 Elm St' && m.providers.lists.main[0].zip === '23220' && !('address' in m.providers.lists.main[0]), 'provider address split');
   ok(m.lifestyle.values.smoking === 'Used to' && m.lifestyle.values.activity === 'Moderately active' && m.lifestyle.values.dietOther === 'Keto' && m.lifestyle.values.caregiverName === 'Jane', 'lifestyle answers carried over');
   ok(!m.senses && m.vision.values.notes === 'Bifocals' && m.hearing.values.aids === 'No' && m.dental.values.dental === '2025-01-' && ['vision', 'hearing', 'dental'].every((id) => st.added.includes(id)), 'vision, hearing and dental split');
+  ok(st.added.includes('immunizations'), 'anyone with vaccines entered keeps the Immunizations section');
   ok(await page.evaluate(() => document.querySelector('#sec-conditions').classList.contains('open')), 'open sections remembered');
 
   // Sample data + PDF
@@ -236,6 +246,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.reload({ waitUntil: 'load' });
   await page.evaluate(() => document.querySelector('#sec-allergies').scrollIntoView());
   await page.screenshot({ path: OUT + '/v4-mobile-allergies.png' });
+  await page.evaluate(() => document.querySelector('#addSection').scrollIntoView());
+  await page.screenshot({ path: OUT + '/v6-mobile-additional.png' });
   ok(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)), 'no horizontal scroll on mobile');
 
   ok(errors.length === 0, 'no console errors ' + JSON.stringify(errors));

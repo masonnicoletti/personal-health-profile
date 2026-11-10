@@ -61,7 +61,7 @@
         <div id="sections"></div>
 
         <section class="add-section card" id="addSection">
-          <h2>Add a section</h2>
+          <h2>Additional Sections</h2>
           <div class="add-grid" id="addGrid"></div>
         </section>
 
@@ -112,7 +112,7 @@
       <div class="privacy-text">
         <section>
           <h3>Your information stays with you</h3>
-          <p>Everything you enter is saved only on this device, in this browser. It is never sent to us or anyone else. There are no accounts and no tracking.</p>
+          <p>Everything you enter is saved only on this device, in this browser. It is never sent anywhere else. There are no accounts and no tracking.</p>
         </section>
         <section>
           <h3>Anyone who can open this device can see it</h3>
@@ -123,8 +123,8 @@
           <p>A backup file or PDF is only as private as where you keep it. Store them somewhere safe and share them only with people you trust.</p>
         </section>
         <section>
-          <h3>We can't recover your information</h3>
-          <p>Because nothing is stored with us, clearing your browser data or losing your device erases it. Keep a backup.</p>
+          <h3>Lost information can't be recovered</h3>
+          <p>Because nothing is stored anywhere else, clearing your browser data or losing your device erases it. Keep a backup.</p>
         </section>
         <section>
           <h3>This is a record, not medical advice</h3>
@@ -150,6 +150,10 @@
           <b>Restore from backup</b>
           <span>Replace what is here with a saved backup file.</span>
         </button>
+        <button type="button" class="setting" id="shareBtn">
+          <b>Share this site</b>
+          <span>Send the link to someone. Your information is never included.</span>
+        </button>
         <button type="button" class="setting" id="tourBtn">
           <b>Replay the tutorial</b>
           <span>See the welcome steps again.</span>
@@ -162,6 +166,29 @@
           <b>Erase everything</b>
           <span>Delete all information saved on this device.</span>
         </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Share this site -->
+  <dialog id="shareDialog" class="panel" aria-labelledby="shareTitle">
+    <form method="dialog" class="dialog-body">
+      <div class="panel-head">
+        <h2 id="shareTitle">Share this site</h2>
+        <button value="close" class="btn ghost">Close</button>
+      </div>
+      <p class="sub">Only the link is shared, never your information.</p>
+      <div class="share-link">
+        <input type="text" id="shareUrl" readonly aria-label="Link to this site">
+        <button type="button" class="btn primary" id="shareCopy">Copy link</button>
+      </div>
+      <div class="settings-list share-list">
+        <button type="button" class="setting" id="shareNative" hidden><b>More options</b><span>Use your device's share menu.</span></button>
+        <a class="setting" id="shareText"><b>Text message</b></a>
+        <a class="setting" id="shareEmail"><b>Email</b></a>
+        <a class="setting" id="shareFacebook" target="_blank" rel="noopener"><b>Facebook</b></a>
+        <a class="setting" id="shareX" target="_blank" rel="noopener"><b>X (Twitter)</b></a>
+        <a class="setting" id="shareWhatsApp" target="_blank" rel="noopener"><b>WhatsApp</b></a>
       </div>
     </form>
   </dialog>

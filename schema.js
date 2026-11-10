@@ -385,6 +385,8 @@
     {
       id: 'immunizations',
       title: 'Immunizations',
+      optional: true,
+      blurb: 'Vaccines and when you got them',
       kind: 'list',
       info: {
         what: 'Vaccines you have received, with dates.',
@@ -757,7 +759,7 @@
   ];
 
   // Display order: core sections, then any optional sections the person added, with Notes & Questions always last
-  const ORDER = ['basic', 'conditions', 'lifestyle', 'family', 'meds', 'surgeries', 'immunizations', 'allergies', 'providers', 'insurance', 'emergency'];
+  const ORDER = ['basic', 'conditions', 'lifestyle', 'family', 'meds', 'surgeries', 'allergies', 'providers', 'insurance', 'emergency'];
   const LAST = 'notes';
   const defined = new Map(SECTIONS.map((s, i) => [s.id, i]));
   const rank = (s) => (s.id === LAST ? 1e6 : ORDER.includes(s.id) ? ORDER.indexOf(s.id) : ORDER.length + defined.get(s.id));

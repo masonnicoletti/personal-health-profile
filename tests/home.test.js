@@ -27,6 +27,7 @@ const clickText = (p, sel, text) =>
   await page.screenshot({ path: OUT + '/home-1-new.png' });
 
   await page.click('#homePrimary');
+  ok((await vis(page, '#formView')) && (await page.$eval('#tourDialog', (d) => d.open)), 'Get Started opens the form, then the tutorial on top of it');
   const steps = [];
   for (let i = 0; i < 4; i++) {
     steps.push(await page.evaluate(() => [document.querySelector('#tourCount').textContent, document.querySelector('#tourTitle').textContent, document.querySelector('#tourNext').textContent]));
@@ -54,6 +55,8 @@ const clickText = (p, sel, text) =>
   const priv = await page.$$eval('#privacyDialog h3', (hs) => hs.map((x) => x.textContent));
   ok((await page.$eval('#privacyDialog', (d) => d.open)) && priv.length === 5 && priv[0] === 'Your information stays with you', 'privacy panel: ' + priv.length + ' points');
   await page.screenshot({ path: OUT + '/home-9-privacy.png' });
+  const privText = await page.$eval('#privacyDialog .privacy-text', (e) => e.innerText);
+  ok(!/\b(we|us|our)\b/i.test(privText), 'privacy text avoids "we" and "us"');
   await clickText(page, '#privacyDialog button', 'Close');
 
   // Instructions
@@ -96,7 +99,30 @@ const clickText = (p, sel, text) =>
   // Settings
   await clickText(page, '#homeView .settings-open', 'Settings');
   const opts = await page.$$eval('#settingsDialog .setting b', (bs) => bs.map((b) => b.textContent));
-  ok(opts.join() === 'Save a backup,Restore from backup,Replay the tutorial,Load sample data,Erase everything', 'settings: ' + opts.join(', '));
+  ok(opts.join() === 'Save a backup,Restore from backup,Share this site,Replay the tutorial,Load sample data,Erase everything', 'settings: ' + opts.join(', '));
+
+  // Share this site: link only, ready-made for text, email and social apps
+  await page.click('#shareBtn');
+  const sh = await page.evaluate(() => ({
+    open: document.querySelector('#shareDialog').open,
+    url: document.querySelector('#shareUrl').value,
+    sms: document.querySelector('#shareText').href,
+    mail: document.querySelector('#shareEmail').href,
+    fb: document.querySelector('#shareFacebook').href,
+    x: document.querySelector('#shareX').href,
+    wa: document.querySelector('#shareWhatsApp').href,
+  }));
+  const site = URL.split('#')[0];
+  ok(sh.open && sh.url === site && !sh.url.includes('#'), 'share link is the site address: ' + sh.url);
+  ok(sh.sms.startsWith('sms:') && sh.mail.startsWith('mailto:') && sh.fb.includes(encodeURIComponent(site)) && sh.x.includes('twitter.com/intent') && sh.wa.startsWith('https://wa.me/'), 'text, email and social links prepared');
+  ok(!/Margaret|Ellis|Lisinopril/.test(Object.values(sh).join(' ')), 'no personal information in shared links');
+  await page.browserContext().overridePermissions(site, ['clipboard-read', 'clipboard-write']);
+  await page.click('#shareCopy');
+  await wait(100);
+  ok((await page.$eval('#shareCopy', (b) => b.textContent)) === 'Copied' && (await page.evaluate(() => navigator.clipboard.readText())) === site, 'Copy link copies the address');
+  await page.screenshot({ path: OUT + '/home-11-share.png' });
+  await clickText(page, '#shareDialog button', 'Close');
+  await clickText(page, '#homeView .settings-open', 'Settings');
   await page.screenshot({ path: OUT + '/home-5-settings.png' });
   await page.click('#eraseBtn');
   const conf = await page.evaluate(() => ({

@@ -186,7 +186,7 @@
       },
       vision: { values: { glasses: 'Glasses', rx: 'Reading +2.00', eyeExam: '2026-03-', eyeConditions: 'Early cataract, left eye' } },
     },
-    added: ['appointments', 'vision'],
+    added: ['immunizations', 'appointments', 'vision'],
     open: { basic: true },
   });
 })();
