@@ -2,8 +2,6 @@
 
 A simple web form for keeping your health information in one organized place, then turning it into a clean PDF to bring to appointments.
 
-It is designed first for older adults who have a lot of medical information to track.
-
 ## Privacy
 
 Everything you enter is saved **only in the browser on your own device**. Nothing is sent to a server, and no one else can see it. Each person who opens the link gets their own separate profile.
@@ -55,3 +53,7 @@ npm test
 | `manifest.webmanifest`, `icons/` | Lets people install it to their Home Screen like an app |
 | `sw.js` | Offline support. Caches only the app's own files, never health information |
 | `vendor/` | [jsPDF](https://github.com/parallax/jsPDF) 2.5.1 and [jsPDF-AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) 3.8.2 (MIT), included so the app works offline |
+
+## License
+
+[MIT](LICENSE). The bundled jsPDF and jsPDF-AutoTable libraries keep their own MIT licenses.

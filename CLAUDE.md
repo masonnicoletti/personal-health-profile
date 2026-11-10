@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Personal Health Profile: a static, offline-capable web app where people (initially older adults) record their health information and export it as a PDF for appointments. Plain HTML/CSS/JS with no framework, build step, package manager or backend. All user data lives in the browser's `localStorage`; nothing is sent anywhere. Deployed with GitHub Pages from `main` (root folder) at https://masonnicoletti.github.io/personal-health-profile/.
+Personal Health Profile: a static, offline-capable web app where people record their health information and export it as a PDF for appointments. Plain HTML/CSS/JS with no framework, build step, package manager or backend. All user data lives in the browser's `localStorage`; nothing is sent anywhere. Deployed with GitHub Pages from `main` (root folder) at https://masonnicoletti.github.io/personal-health-profile/.
 
 ## Commands
 
@@ -79,7 +79,7 @@ Scripts load in order from `index.html` and share one global namespace, `window.
 
 ## Design conventions the user has set
 
-- Audience is older adults: large text and tap targets, minimal wording, nothing required, plain labels.
+- Easy for anyone to use: large text and tap targets, minimal wording, nothing required, plain labels. Don't frame the app or its copy around a particular age group.
 - No icons in the form. The only exceptions are the circular "?" info buttons, which show a short "What to add / Why it helps" panel.
 - Colors are tokens in `:root` in `styles.css`: deep blue menu bar (`--bar`, `#12305a`) with light text (`--on-bar`), cerulean accent (`--accent`, `#007ba7`), light grey page background. Section headers are unshaded.
 - Data from other sections is offered as dropdowns or suggestions rather than retyped (offices, providers).
