@@ -175,6 +175,32 @@ const clickText = (p, sel, text) =>
   await page.click('#previewBack');
   await clickText(page, '#pdfDialog button', 'Cancel');
 
+  // Menu bar buttons: white with cerulean text; Save PDF stays solid cerulean
+  const colors = await page.evaluate(() => {
+    const st = (sel) => { const c = getComputedStyle(document.querySelector(sel)); return [c.backgroundColor, c.color]; };
+    return { settings: st('#formView .settings-open'), privacy: st('#formView .privacy-open'), save: st('#formView .pdf-open') };
+  });
+  ok(colors.settings.join() === 'rgb(255, 255, 255),rgb(0, 123, 167)' && colors.privacy.join() === colors.settings.join(), 'menu bar buttons are white with cerulean text');
+  ok(colors.save[0] === 'rgb(0, 123, 167)' && colors.save[1] === 'rgb(255, 255, 255)', 'Save PDF stays solid cerulean');
+
+  // Phones: each menu bar stays on a single row
+  for (const w of [320, 360, 375, 390, 430]) {
+    await page.setViewport({ width: w, height: 800, isMobile: true, hasTouch: true });
+    for (const view of ['home', 'form']) {
+      await page.goto(URL + (view === 'form' ? '#form' : ''), { waitUntil: 'load' });
+      const bar = await page.evaluate((view) => {
+        const inner = document.querySelector(`#${view}View .topbar-inner`);
+        const items = [...inner.querySelectorAll(':scope > img, :scope > .brand, .btn')].filter((e) => e.getClientRects().length);
+        const tops = items.map((e) => Math.round(e.getBoundingClientRect().top));
+        const right = Math.max(...items.map((e) => e.getBoundingClientRect().right));
+        return { rows: new Set(tops.map((t) => Math.round(t / 10))).size, fits: right <= window.innerWidth, count: items.length };
+      }, view);
+      ok(bar.rows === 1 && bar.fits, `${view} menu bar fits on one row at ${w}px (${bar.count} items)`);
+      if (w === 390) await page.screenshot({ path: `${OUT}/bar-${view}-390.png`, clip: { x: 0, y: 0, width: 390, height: 120 } });
+    }
+  }
+  await page.setViewport({ width: 1280, height: 900 });
+
   // Phone: panels take over the screen
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await page.goto(URL, { waitUntil: 'load' });

@@ -108,8 +108,8 @@ p { margin: 0; }
 .brand-icon { width: 36px; height: 36px; border-radius: 9px; flex: none; display: block; }
 .home-bar .home-icon { margin-right: auto; }
 .topbar .save-status { color: var(--on-bar-sub); }
-.topbar .btn.ghost { background: transparent; color: var(--on-bar); border-color: rgba(243, 245, 248, 0.45); }
-.topbar .btn.ghost:hover { background: rgba(243, 245, 248, 0.1); border-color: var(--on-bar); }
+.topbar .btn.ghost { background: #fff; color: var(--accent); border-color: #fff; }
+.topbar .btn.ghost:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
 .topbar .btn.primary { background: var(--accent); }
 .topbar .btn.primary:hover { background: #1a8fbd; }
 .topbar .btn:focus-visible, .brand:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(243, 245, 248, 0.6); }
@@ -483,13 +483,12 @@ dialog.preview { width: min(900px, calc(100vw - 32px)); max-height: calc(100vh -
   .sidenav { display: none; }
 }
 @media (max-width: 640px) {
-  .topbar-inner { padding: 12px 16px; }
+  .topbar-inner { padding: 10px 16px; flex-wrap: nowrap; gap: 8px; }
   .layout { padding: 16px 16px 64px; }
-  .brand .sub { display: none; }
-  .actions { margin-left: 0; width: 100%; gap: 8px; }
-  .actions .btn { padding: 0 12px; }
-  .actions .primary { margin-left: auto; }
-  .save-status { order: 10; width: 100%; text-align: left; }
+  .brand-title, .save-status { display: none; } /* icon only, so the buttons fit on one row */
+  .actions { margin-left: auto; gap: 6px; flex-wrap: nowrap; }
+  .home-bar { gap: 6px; }
+  .topbar .btn { font-size: 0.8rem; min-height: 40px; padding: 0 11px; }
   .f.half, .f.third, .f.twothird { grid-column: span 6; }
   .checklist, .choices { grid-template-columns: 1fr; }
   .add-opt { flex-wrap: wrap; padding: 10px 12px 10px 10px; }
@@ -520,6 +519,12 @@ dialog.preview { width: min(900px, calc(100vw - 32px)); max-height: calc(100vh -
 @media (max-width: 640px) {
   .notice { padding: 14px 16px; }
   .notice-actions { width: 100%; justify-content: flex-end; }
+}
+/* The smallest phones (iPhone SE and similar) */
+@media (max-width: 360px) {
+  .topbar-inner { padding: 10px 12px; }
+  .topbar .btn { font-size: 0.75rem; padding: 0 8px; }
+  .home-bar, .actions { gap: 4px; }
 }
 
 /* Home screen */
