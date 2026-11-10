@@ -47,6 +47,15 @@ const clickText = (p, sel, text) =>
   await wait(200);
   ok(await vis(page, '#homeView'), 'browser back returns home');
 
+  // Privacy, from the menu bar
+  const homeBar = await page.$$eval('#homeView .topbar button', (bs) => bs.map((b) => b.textContent));
+  ok(homeBar.join() === 'Instructions,Privacy,Settings', 'home menu bar: ' + homeBar.join(', '));
+  await clickText(page, '#homeView .privacy-open', 'Privacy');
+  const priv = await page.$$eval('#privacyDialog h3', (hs) => hs.map((x) => x.textContent));
+  ok((await page.$eval('#privacyDialog', (d) => d.open)) && priv.length === 5 && priv[0] === 'Your information stays with you', 'privacy panel: ' + priv.length + ' points');
+  await page.screenshot({ path: OUT + '/home-9-privacy.png' });
+  await clickText(page, '#privacyDialog button', 'Close');
+
   // Instructions
   await page.click('#instrBtn');
   ok((await page.$$('#instrSteps li')).length === 6 && (await page.$eval('#instrDialog', (d) => d.open)), 'instructions panel with 6 steps');
@@ -109,6 +118,30 @@ const clickText = (p, sel, text) =>
   // Form header: Settings replaces Backup
   await page.goto(URL + '#form', { waitUntil: 'load' });
   ok(!(await page.$('#backupBtn')) && (await vis(page, '#formView .settings-open')) && (await vis(page, '#homeBtn')), 'form header has Home and Settings, no Backup');
+  ok(await vis(page, '#formView .privacy-open'), 'form header has Privacy');
+
+  // PDF preview draws every page before downloading
+  await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
+  await page.reload({ waitUntil: 'load' });
+  await clickText(page, '#formView .pdf-open', 'Download PDF');
+  await page.click('#pdfPreview');
+  await page.waitForFunction(() => /pages?$|could not/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
+  const pv = await page.evaluate(() => ({
+    status: document.querySelector('#previewStatus').textContent,
+    canvases: document.querySelectorAll('#previewPages canvas').length,
+    drawn: [...document.querySelectorAll('#previewPages canvas')].every((c) => c.width > 300 && c.height > 300),
+  }));
+  ok(pv.canvases >= 3 && pv.drawn && pv.status === pv.canvases + ' pages', 'preview shows every page: ' + JSON.stringify(pv));
+  await page.screenshot({ path: OUT + '/home-10-preview.png' });
+  await page.click('#previewBack');
+  ok(await page.$eval('#pdfDialog', (d) => d.open), 'Back returns to the section choices');
+  // Fewer sections means fewer pages
+  await page.evaluate(() => document.querySelectorAll('#pdfChoices input').forEach((c) => (c.checked = c.value === 'meds')));
+  await page.click('#pdfPreview');
+  await page.waitForFunction(() => /^1 page$/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
+  ok((await page.$$('#previewPages canvas')).length === 1, 'preview follows the chosen sections');
+  await page.click('#previewBack');
+  await clickText(page, '#pdfDialog button', 'Cancel');
 
   // Phone: panels take over the screen
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });

@@ -52,8 +52,8 @@ npm test
 | `sample.js` | Fictional sample profile, loaded from Settings → Load sample data |
 | `manifest.webmanifest`, `icons/` | Lets people install it to their Home Screen like an app |
 | `sw.js` | Offline support. Caches only the app's own files, never health information |
-| `vendor/` | [jsPDF](https://github.com/parallax/jsPDF) 2.5.1 and [jsPDF-AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) 3.8.2 (MIT), included so the app works offline |
+| `vendor/` | [jsPDF](https://github.com/parallax/jsPDF) 2.5.1 and [jsPDF-AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) 3.8.2 (MIT) create the PDF; [PDF.js](https://github.com/mozilla/pdf.js) 3.11.174 (Apache 2.0) draws the preview. Included so the app works offline |
 
 ## License
 
-[MIT](LICENSE). The bundled jsPDF and jsPDF-AutoTable libraries keep their own MIT licenses.
+[MIT](LICENSE). The bundled jsPDF and jsPDF-AutoTable libraries keep their own MIT licenses, and PDF.js keeps its Apache 2.0 license (`vendor/pdfjs/LICENSE`).

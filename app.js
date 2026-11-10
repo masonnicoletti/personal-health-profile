@@ -177,6 +177,58 @@
       return wrap;
     }
     if (f.type === 'checklist') return checklist(f, obj, changed, wrap, id);
+    if (f.type === 'group') {
+      if (!Array.isArray(obj[f.k])) obj[f.k] = [];
+      const items = obj[f.k];
+      if (!items.length) items.push({});
+      const list = h('div', { class: 'group-items' });
+      const draw = (focusIdx) => {
+        list.replaceChildren(
+          ...items.map((it, i) => {
+            const card = h('div', { class: 'group-item' }, fieldGrid(f.fields, it, changed));
+            if (items.length > 1)
+              card.append(
+                h(
+                  'div',
+                  { class: 'entry-actions' },
+                  h('span', { class: 'spacer' }),
+                  h('button', {
+                    type: 'button',
+                    class: 'link danger',
+                    text: 'Remove ' + f.itemLabel,
+                    onclick: () => {
+                      items.splice(i, 1);
+                      changed();
+                      draw();
+                    },
+                  })
+                )
+              );
+            return card;
+          })
+        );
+        if (focusIdx != null) {
+          const first = list.children[focusIdx].querySelector('input, select, textarea');
+          if (first) first.focus();
+        }
+      };
+      draw();
+      wrap.append(
+        h('span', { class: 'lbl group-label', text: f.label }),
+        list,
+        h('button', {
+          type: 'button',
+          class: 'btn add',
+          text: '+ Add another ' + f.itemLabel,
+          onclick: () => {
+            items.push({});
+            changed();
+            draw(items.length - 1);
+          },
+        })
+      );
+      return wrap;
+    }
     if (f.type === 'heading') {
       wrap.className = 'f full heading';
       wrap.append(h('h3', { text: f.label }));
@@ -889,6 +941,7 @@
 
   $('#instrSteps').replaceChildren(...STEPS.concat(MORE_STEPS).map((s) => h('li', {}, h('b', { text: s.title }), h('p', { text: s.text }))));
   $('#instrBtn').addEventListener('click', () => $('#instrDialog').showModal());
+  document.querySelectorAll('.privacy-open').forEach((b) => b.addEventListener('click', () => $('#privacyDialog').showModal()));
 
   /* ---------- Pop-up confirmation ---------- */
   function askConfirm(title, text, okLabel, danger) {
@@ -992,6 +1045,7 @@
     );
     $('#pdfEmpty').hidden = !!secs.length;
     $('#pdfGo').disabled = !secs.length;
+    $('#pdfPreview').disabled = !secs.length;
     $('#pdfSelectAll').hidden = !secs.length;
     dlg.showModal();
   }
@@ -1001,8 +1055,78 @@
     const all = cbs.every((c) => c.checked);
     cbs.forEach((c) => (c.checked = !all));
   });
+  const selectedIds = () => [...document.querySelectorAll('#pdfChoices input:checked')].map((c) => c.value);
+
+  // The preview draws each PDF page with Mozilla's PDF.js, loaded only the first time it's needed
+  let pdfjsLoading = null;
+  function loadPdfjs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (!pdfjsLoading)
+      pdfjsLoading = new Promise((resolve, reject) => {
+        const s = h('script', { src: 'vendor/pdfjs/pdf.min.js' });
+        s.onload = () => {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+        };
+        s.onerror = () => {
+          pdfjsLoading = null;
+          s.remove();
+          reject(new Error('PDF.js did not load'));
+        };
+        document.head.append(s);
+      });
+    return pdfjsLoading;
+  }
+
+  const preview = $('#previewDialog');
+  let previewRun = 0;
+  async function openPreview() {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    const run = ++previewRun;
+    const pages = $('#previewPages');
+    const status = $('#previewStatus');
+    pages.replaceChildren();
+    status.textContent = 'Preparing preview…';
+    preview.showModal();
+    try {
+      const lib = await loadPdfjs();
+      const data = PHP.buildPdf(state, ids, { save: false }).output('arraybuffer');
+      const pdf = await lib.getDocument({ data }).promise;
+      const width = pages.clientWidth || 600;
+      const ratio = window.devicePixelRatio || 1;
+      for (let n = 1; n <= pdf.numPages; n++) {
+        if (run !== previewRun) return; // closed or reopened meanwhile
+        const page = await pdf.getPage(n);
+        const viewport = page.getViewport({ scale: (width / page.getViewport({ scale: 1 }).width) * ratio });
+        const canvas = h('canvas', { class: 'preview-page', role: 'img', 'aria-label': `Page ${n} of ${pdf.numPages}` });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        pages.append(canvas);
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      }
+      if (run === previewRun) status.textContent = pdf.numPages === 1 ? '1 page' : `${pdf.numPages} pages`;
+    } catch (err) {
+      if (run === previewRun) status.textContent = 'The preview could not be shown. You can still download the PDF.';
+    }
+  }
+  $('#pdfPreview').addEventListener('click', openPreview);
+  preview.addEventListener('close', () => previewRun++);
+  $('#previewBack').addEventListener('click', () => preview.close());
+  $('#previewDownload').addEventListener('click', () => {
+    const ids = selectedIds();
+    preview.close();
+    try {
+      PHP.buildPdf(state, ids);
+      dlg.close();
+    } catch (err) {
+      console.error(err);
+      toast('Could not create the PDF.');
+    }
+  });
+
   $('#pdfGo').addEventListener('click', () => {
-    const ids = [...document.querySelectorAll('#pdfChoices input:checked')].map((c) => c.value);
+    const ids = selectedIds();
     if (!ids.length) return;
     try {
       PHP.buildPdf(state, ids);

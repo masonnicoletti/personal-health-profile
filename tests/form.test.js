@@ -24,7 +24,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // Order, with Notes & Questions last even after adding a section
   let order = await page.$$eval('.sec', (els) => els.map((e) => e.id.slice(4)));
-  ok(order.join() === 'basic,lifestyle,family,conditions,meds,surgeries,immunizations,allergies,providers,insurance,emergency,notes', 'section order: ' + order.join(','));
+  ok(order.join() === 'basic,conditions,lifestyle,family,meds,surgeries,immunizations,allergies,providers,insurance,emergency,notes', 'section order: ' + order.join(','));
   await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.innerText.startsWith('Hearing')).click());
   order = await page.$$eval('.sec', (els) => els.map((e) => e.id.slice(4)));
   ok(order[order.length - 1] === 'notes' && order.includes('hearing'), 'Notes & Questions stays last after adding a section');
@@ -103,7 +103,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.click('#sec-immunizations .btn.add');
   const vopts = await page.$$eval('#sec-immunizations .entry.editing select option', (os) => os.map((o) => o.value));
   const ifields = await labels('#sec-immunizations .entry.editing');
-  ok(vopts.includes('Shingles (Shingrix)') && vopts.includes('Other') && !ifields.includes('Given at'), 'vaccine dropdown, no Given at');
+  ok(vopts.includes('Shingles (Shingrix)') && vopts.includes('Other') && ifields.includes('Administered at'), 'vaccine dropdown and Administered at: ' + ifields.join(', '));
   await page.select('#sec-immunizations .entry.editing select', 'RSV');
   await page.click('#sec-immunizations .entry.editing .btn.primary');
 
@@ -137,8 +137,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const pv = '#sec-providers .entry.editing';
   await page.click('#sec-providers .btn.add');
   const pfields = await labels(pv);
-  ok(pfields[0] === 'Currently seeing' && ['Street address', 'Suite or unit', 'City', 'State', 'ZIP code'].every((l) => pfields.includes(l)) && !pfields.includes('Address'), 'provider address in parts');
-  await page.keyboard.type('Dr. One');
+  ok(pfields[0] === 'Currently seeing' && pfields[1] === 'Prefix' && pfields[2] === 'Name', 'provider prefix comes before name: ' + pfields.slice(0, 3).join(', '));
+  const prefixOpts = await page.$$eval(pv + ' select', (ss) => [...ss[0].options].map((o) => o.value).filter(Boolean));
+  ok(prefixOpts[0] === 'Dr.' && prefixOpts.includes('Other'), 'prefix options: ' + prefixOpts.join(', '));
+  ok(['Street address', 'Suite or unit', 'City', 'State', 'ZIP code'].every((l) => pfields.includes(l)) && !pfields.includes('Address'), 'provider address in parts');
+  await (await page.$(pv + ' select')).select('Dr.');
+  await (await page.evaluateHandle((pv) => [...document.querySelectorAll(pv + ' .f')].find((f) => (f.querySelector('label') || {}).textContent === 'Name').querySelector('input'), pv)).type('One');
   const pInput = (label) => page.evaluateHandle((pv, label) => [...document.querySelectorAll(pv + ' .f')].find((f) => f.querySelector('label') && f.querySelector('label').textContent === label).querySelector('input, select'), pv, label);
   await (await pInput('Office')).type('Hill Clinic');
   await (await pInput('Street address')).type('1 Hill St');
@@ -151,6 +155,26 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const auto = await page.evaluate((pv) => [...document.querySelectorAll(pv + ' .f')].filter((f) => /Street|City|State/.test((f.querySelector('label') || {}).textContent)).map((f) => f.querySelector('input,select').value), pv);
   ok(auto.join() === '1 Hill St,Crozet,VA', 'office autofills every address part: ' + auto.join(', '));
   await page.click(pv + ' .btn.primary');
+
+  // Family history: relative first, then any number of conditions
+  await open('family');
+  const fm = '#sec-family .entry.editing';
+  await page.click('#sec-family .btn.add');
+  const ffields = await labels(fm);
+  ok(ffields[0] === 'Relative' && ffields[1] === 'Status' && ffields.indexOf('Condition') > 1, 'relative details come before conditions: ' + ffields.join(', '));
+  const relOpts = await page.$eval(fm + ' select', (s) => [...s.options].map((o) => o.value).filter(Boolean));
+  ok(relOpts.includes('Mother') && relOpts.includes('Maternal grandmother') && relOpts[relOpts.length - 1] === 'Other', 'relative dropdown with Other');
+  await page.select(fm + ' select', 'Father');
+  await (await page.$$(fm + ' select'))[1].select('Deceased');
+  ok((await labels(fm)).includes('Age at death'), 'Deceased asks age at death');
+  await (await page.$(fm + ' .group-item input')).type('Stroke');
+  await clickText(fm + ' .btn.add', '+ Add another condition');
+  ok((await page.$$(fm + ' .group-item')).length === 2, 'Add another condition adds a second one');
+  await page.keyboard.type('Gout');
+  const fam = (await S()).data.family.lists.main[0];
+  ok(fam.rel === 'Father' && fam.conditions.length === 2 && fam.conditions[0].name === 'Stroke' && fam.conditions[1].name === 'Gout', 'conditions saved for one relative');
+  await page.click(fm + ' .btn.primary');
+  ok((await page.$eval('#sec-family .entry-sum', (e) => e.innerText)).includes('Stroke, Gout'), 'summary lists the conditions');
 
   // Emergency contacts have notes
   await open('emergency');
@@ -167,7 +191,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       dxhistory: { lists: { main: [{ id: 'c3', name: 'Shingles', resolved: '2019--' }] } },
       meds: { lists: { main: [{ id: 'm1', name: 'Aspirin', purpose: 'Heart', current: true }] } },
       allergies: { lists: { main: [{ id: 'a1', name: 'penicillin', reaction: 'Hives', severity: 'Severe' }, { id: 'a2', name: 'Strawberries' }] } },
-      immunizations: { lists: { main: [{ id: 'i1', name: 'Flu', where: 'CVS' }, { id: 'i2', name: 'Yellow fever' }] } },
+      immunizations: { lists: { main: [{ id: 'i1', name: 'Flu', where: 'CVS' }, { id: 'i2', name: 'Yellow fever', notes: 'Given at: Travel clinic\nBooster not needed' }] } },
+      family: { lists: { main: [{ id: 'f1', rel: 'mother', name: 'Diabetes', age: '60', status: 'Living' }, { id: 'f2', rel: 'Mother', name: 'Glaucoma', status: 'Living' }, { id: 'f3', rel: 'Great-uncle', name: 'Gout' }] } },
       providers: { lists: { main: [{ id: 'p1', name: 'Dr. Lee', address: '9 Elm St\nRichmond, VA 23220', current: true }] } },
       lifestyle: { values: { smoking: 'Former', exercise: 'Regular', exerciseDesc: 'Swimming', diet: 'Keto', caregiver: 'Jane' } },
       senses: { values: { glasses: 'Yes', hearing: 'No', dental: '2025-01-', notes: 'Bifocals' } },
@@ -180,7 +205,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(m.conditions.lists.main.length === 3 && !m.dxhistory && m.conditions.lists.main[0].q === 'Diabetes' && /Managed by: Dr. Lee/.test(m.conditions.lists.main[0].notes) && m.conditions.lists.main[2].current === false, 'conditions and diagnosis history merged, Managed by kept in notes');
   ok(!('purpose' in m.meds.lists.main[0]) && m.meds.lists.main[0].notes === 'For: Heart', 'medication For moved to notes');
   ok(m.allergies.lists.main[0].q === 'Penicillin' && m.allergies.lists.main[0].reaction === 'Hives or rash' && m.allergies.lists.main[1].q === 'Other', 'allergies linked to the checklist');
-  ok(m.immunizations.lists.main[0].name === 'Flu (influenza)' && m.immunizations.lists.main[0].notes === 'Given at: CVS' && m.immunizations.lists.main[1].nameOther === 'Yellow fever', 'vaccines matched to the dropdown, Given at kept in notes');
+  const im = m.immunizations.lists.main;
+  ok(im[0].name === 'Flu (influenza)' && im[0].location === 'CVS' && !im[0].notes && im[1].nameOther === 'Yellow fever' && im[1].location === 'Travel clinic' && im[1].notes === 'Booster not needed', 'Given at becomes Administered at, including notes from the last update');
+  ok(m.providers.lists.main[0].prefix === 'Dr.' && m.providers.lists.main[0].name === 'Lee', 'a title in a provider name becomes the prefix');
+  const fmig = m.family.lists.main;
+  ok(fmig.length === 2 && fmig[0].rel === 'Mother' && fmig[0].conditions.map((c) => c.name).join() === 'Diabetes,Glaucoma' && fmig[1].rel === 'Other' && fmig[1].relOther === 'Great-uncle', 'family entries grouped by relative: ' + JSON.stringify(fmig.map((e) => [e.rel, (e.conditions || []).length])));
   ok(m.providers.lists.main[0].street === '9 Elm St' && m.providers.lists.main[0].zip === '23220' && !('address' in m.providers.lists.main[0]), 'provider address split');
   ok(m.lifestyle.values.smoking === 'Used to' && m.lifestyle.values.activity === 'Moderately active' && m.lifestyle.values.dietOther === 'Keto' && m.lifestyle.values.caregiverName === 'Jane', 'lifestyle answers carried over');
   ok(!m.senses && m.vision.values.notes === 'Bifocals' && m.hearing.values.aids === 'No' && m.dental.values.dental === '2025-01-' && ['vision', 'hearing', 'dental'].every((id) => st.added.includes(id)), 'vision, hearing and dental split');
@@ -190,10 +219,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
   await page.reload({ waitUntil: 'load' });
   await page.evaluate(() => PHP.SECTIONS.forEach((s) => { const t = document.querySelector('#sec-' + s.id + ' .sec-toggle'); if (t && t.getAttribute('aria-expanded') === 'false') t.click(); }));
-  for (const id of ['basic', 'lifestyle', 'conditions', 'allergies']) {
+  for (const id of ['basic', 'lifestyle', 'conditions', 'allergies', 'family', 'immunizations']) {
     const el = await page.$('#sec-' + id);
     await el.screenshot({ path: OUT + '/v4-' + id + '.png' });
   }
+  await page.click('#sec-family .entry .edit');
+  await (await page.$('#sec-family')).screenshot({ path: OUT + '/v5-family-edit.png' });
+  await page.click('#sec-family .entry.editing .btn.primary');
   await page.click('#sec-providers .entry .edit');
   await (await page.$('#sec-providers')).screenshot({ path: OUT + '/v4-providers.png' });
   const b64 = await page.evaluate(() => PHP.buildPdf(PHP._debug.state, PHP.SECTIONS.map((s) => s.id), { save: false }).output('datauristring').split(',')[1]);

@@ -62,8 +62,17 @@
       family: {
         lists: {
           main: L([
-            { rel: 'Mother', name: 'Heart disease', age: '70', status: 'Deceased' },
-            { rel: 'Brother', name: 'Type 2 diabetes', age: '58', status: 'Living' },
+            {
+              rel: 'Mother',
+              status: 'Deceased',
+              ageDeath: '78',
+              conditions: [
+                { name: 'Heart disease', age: '70' },
+                { name: 'High blood pressure', age: '55', notes: 'Took medication for many years' },
+              ],
+            },
+            { rel: 'Brother', status: 'Living', conditions: [{ name: 'Type 2 diabetes', age: '58' }] },
+            { rel: 'Maternal grandmother', status: 'Deceased', conditions: [{ name: 'Breast cancer', age: '66' }] },
           ]),
         },
       },
@@ -99,11 +108,11 @@
       immunizations: {
         lists: {
           main: L([
-            { name: 'Flu (influenza)', date: '2026-10-02' },
-            { name: 'COVID-19', date: '2026-10-02' },
+            { name: 'Flu (influenza)', date: '2026-10-02', location: 'Main Street Pharmacy' },
+            { name: 'COVID-19', date: '2026-10-02', location: 'Main Street Pharmacy' },
             { name: 'RSV', date: '2024-09-' },
             { name: 'Pneumonia (PCV20)', date: '2023-11-' },
-            { name: 'Shingles (Shingrix)', date: '2022-05-', notes: 'Both doses' },
+            { name: 'Shingles (Shingrix)', date: '2022-05-', location: 'Albemarle Family Medicine', notes: 'Both doses' },
           ]),
         },
       },
@@ -118,10 +127,10 @@
       providers: {
         lists: {
           main: L([
-            { current: true, name: 'Dr. Anita Patel', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2006--' },
-            { current: true, name: 'Sam Rivera, PA-C', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2022--' },
-            { current: true, name: 'Dr. Linh Nguyen', specialty: 'Endocrinology', office: 'UVA Endocrinology', phone: '(434) 555-0155', ...UVA, start: '2015--' },
-            { current: false, name: 'Dr. Chidi Okafor', specialty: 'Oncology', office: 'UVA Cancer Center', phone: '(434) 555-0160', ...UVA, start: '2011--', end: '2017--', reason: 'Completed treatment' },
+            { current: true, prefix: 'Dr.', name: 'Anita Patel', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2006--' },
+            { current: true, prefix: 'Mr.', name: 'Sam Rivera, PA-C', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2022--' },
+            { current: true, prefix: 'Dr.', name: 'Linh Nguyen', specialty: 'Endocrinology', office: 'UVA Endocrinology', phone: '(434) 555-0155', ...UVA, start: '2015--' },
+            { current: false, prefix: 'Dr.', name: 'Chidi Okafor', specialty: 'Oncology', office: 'UVA Cancer Center', phone: '(434) 555-0160', ...UVA, start: '2011--', end: '2017--', reason: 'Completed treatment' },
           ]),
         },
       },

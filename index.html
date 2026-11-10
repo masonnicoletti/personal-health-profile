@@ -21,6 +21,7 @@
     <header class="topbar">
       <div class="topbar-inner home-bar">
         <button type="button" class="btn ghost" id="instrBtn">Instructions</button>
+        <button type="button" class="btn ghost privacy-open">Privacy</button>
         <button type="button" class="btn ghost settings-open">Settings</button>
       </div>
     </header>
@@ -44,6 +45,7 @@
         </div>
         <div class="actions">
           <span class="save-status" id="saveStatus" aria-live="polite"></span>
+          <button type="button" class="btn ghost privacy-open">Privacy</button>
           <button type="button" class="btn ghost settings-open">Settings</button>
           <button type="button" class="btn primary pdf-open">Download PDF</button>
         </div>
@@ -79,7 +81,55 @@
         <button type="button" class="btn ghost" id="pdfSelectAll">Select all</button>
         <span class="spacer"></span>
         <button value="cancel" class="btn ghost">Cancel</button>
+        <button type="button" class="btn ghost" id="pdfPreview">Preview</button>
         <button type="button" class="btn primary" id="pdfGo">Download</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- PDF preview -->
+  <dialog id="previewDialog" class="panel preview" aria-labelledby="previewTitle">
+    <div class="dialog-body">
+      <div class="panel-head">
+        <h2 id="previewTitle">Preview</h2>
+        <div class="panel-head-actions">
+          <button type="button" class="btn ghost" id="previewBack">Back</button>
+          <button type="button" class="btn primary" id="previewDownload">Download</button>
+        </div>
+      </div>
+      <p class="sub" id="previewStatus" aria-live="polite"></p>
+      <div class="preview-pages" id="previewPages"></div>
+    </div>
+  </dialog>
+
+  <!-- Privacy -->
+  <dialog id="privacyDialog" class="panel" aria-labelledby="privacyTitle">
+    <form method="dialog" class="dialog-body">
+      <div class="panel-head">
+        <h2 id="privacyTitle">Privacy</h2>
+        <button value="close" class="btn ghost">Close</button>
+      </div>
+      <div class="privacy-text">
+        <section>
+          <h3>Your information stays with you</h3>
+          <p>Everything you enter is saved only on this device, in this browser. It is never sent to us or anyone else. There are no accounts and no tracking.</p>
+        </section>
+        <section>
+          <h3>Anyone who can open this device can see it</h3>
+          <p>Use a passcode on your phone or computer. Avoid using a shared or public computer.</p>
+        </section>
+        <section>
+          <h3>Backups and PDFs leave the app</h3>
+          <p>A backup file or PDF is only as private as where you keep it. Store them somewhere safe and share them only with people you trust.</p>
+        </section>
+        <section>
+          <h3>We can't recover your information</h3>
+          <p>Because nothing is stored with us, clearing your browser data or losing your device erases it. Keep a backup.</p>
+        </section>
+        <section>
+          <h3>This is a record, not medical advice</h3>
+          <p>Talk to your doctor about your health decisions.</p>
+        </section>
       </div>
     </form>
   </dialog>

@@ -46,7 +46,7 @@ Scripts load in order from `index.html` and share one global namespace, `window.
     - `questionnaire`: Medical History's condition checklist; each checked item becomes an entry linked by `e.q`.
     - `choices`: Allergies; the whole section is a checklist whose entries carry `q`, and `'Other'` allows several.
     - `noneLabel`: a "No known …" checkbox.
-- **Field types:** `text`, `long`, `date`, `phone`, `number` (optional `unit`), `height`, `select`, `check`, `checklist`, `heading`.
+- **Field types:** `text`, `long`, `date`, `phone`, `number` (optional `unit`), `height`, `select`, `check`, `checklist`, `heading`, `group` (a repeating set of sub-fields stored as an array on the entry, e.g. a relative's conditions; `format(item)` controls its PDF text).
   - Field options: `showIf(values)` for conditional fields, `suggest()` for datalist suggestions, `pdfLabel` for a shorter PDF label.
   - Any `select` whose options include `'Other'` automatically gets a text box stored at `<key>Other`. Use `PHP.ov(obj, key)` to read the effective value.
   - Select `opts` can be a function (e.g. offices and providers come from the Providers section via `PHP.getState()`).
@@ -72,6 +72,8 @@ Scripts load in order from `index.html` and share one global namespace, `window.
 - Section changes re-render the whole section via `rerender(id)`. The `editing` set (which entries are open for editing) is UI-only and not saved.
 - Dialogs (Download PDF, Settings, Instructions, tutorial, confirm) are native `<dialog>` elements. `.panel` dialogs fill the screen on phones. Close a dialog before showing a toast, because the modal's top layer hides it.
 - Destructive actions call `snapshot()` first, then show an Undo toast.
+
+**PDF preview** (in `app.js`) renders the same jsPDF output to canvases with PDF.js (`vendor/pdfjs/`), injected as a script only on first use. PDF.js is deliberately not in the service worker's `ASSETS`, to avoid a 1.4 MB download for everyone; it's cached once used.
 
 **`pdf.js`** prints only what is filled in. Empty fields, columns, entries and sections are omitted, columns are built with `PHP.outputCols`, and split lists print separate Current and Past tables.
 

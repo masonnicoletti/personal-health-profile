@@ -73,11 +73,31 @@
     return [...seen.values()];
   };
   PHP.officeNames = () => uniq(PHP.providers().map((p) => p.office));
-  PHP.currentProviderNames = () => uniq(PHP.providers().filter(PHP.isCurrent).map((p) => p.name));
+  PHP.providerName = (p) => [PHP.ov(p, 'prefix'), p.name].filter((x) => PHP.isFilled(x)).join(' ');
+  PHP.currentProviderNames = () => uniq(PHP.providers().filter(PHP.isCurrent).map(PHP.providerName));
 
   const STATES = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'Other'];
   const SPECIALTIES = ['Primary care', 'Audiology', 'Cardiology', 'Dentistry', 'Dermatology', 'Endocrinology', 'Gastroenterology', 'Geriatrics', 'Nephrology', 'Neurology', 'Oncology', 'Ophthalmology', 'Optometry', 'Orthopedics', 'Physical therapy', 'Podiatry', 'Psychiatry', 'Counseling', 'Pulmonology', 'Rheumatology', 'Urology', 'Other'];
   const RELATIONS = ['Spouse', 'Partner', 'Son', 'Daughter', 'Parent', 'Sibling', 'Grandchild', 'Other relative', 'Friend', 'Neighbor', 'Caregiver', 'Other'];
+  const PREFIXES = ['Dr.', 'Mr.', 'Mrs.', 'Ms.', 'Mx.', 'Prof.', 'Other'];
+  const RELATIVES = [
+    'Mother',
+    'Father',
+    'Sister',
+    'Brother',
+    'Daughter',
+    'Son',
+    'Maternal grandmother',
+    'Maternal grandfather',
+    'Paternal grandmother',
+    'Paternal grandfather',
+    'Aunt',
+    'Uncle',
+    'Cousin',
+    'Half-sister',
+    'Half-brother',
+    'Other',
+  ];
   const VACCINES = [
     'Flu (influenza)',
     'COVID-19',
@@ -254,14 +274,28 @@
         kind: 'history',
         itemLabel: 'relative',
         fields: [
-          { k: 'rel', label: 'Relative', type: 'text', w: 'half', ph: 'e.g. Mother' },
-          { k: 'name', label: 'Condition', type: 'text', w: 'half' },
-          { k: 'age', label: 'Age at diagnosis', type: 'number', w: 'half' },
+          { k: 'rel', label: 'Relative', type: 'select', opts: RELATIVES, w: 'half' },
           { k: 'status', label: 'Status', type: 'select', opts: ['Living', 'Deceased'], w: 'half' },
-          { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
+          { k: 'ageDeath', label: 'Age at death', type: 'number', w: 'half', showIf: (v) => v.status === 'Deceased' },
+          {
+            k: 'conditions',
+            label: 'Conditions',
+            type: 'group',
+            itemLabel: 'condition',
+            w: 'full',
+            fields: [
+              { k: 'name', label: 'Condition', type: 'text', w: 'half' },
+              { k: 'age', label: 'Age at diagnosis', type: 'number', w: 'half' },
+              { k: 'notes', label: 'Notes', type: 'text', w: 'full' },
+            ],
+            format: (c) => [c.name, PHP.isFilled(c.age) && `(age ${c.age})`].filter(Boolean).join(' ') + (PHP.isFilled(c.notes) ? ` - ${c.notes.trim()}` : ''),
+          },
         ],
-        title_: (e) => [e.rel, e.name].filter(Boolean).join(': '),
-        sub: (e) => [e.age && 'Age ' + e.age, e.status].filter(Boolean).join(' · '),
+        title_: (e) => PHP.ov(e, 'rel'),
+        sub: (e) =>
+          [(e.conditions || []).map((c) => c.name).filter((x) => PHP.isFilled(x)).join(', '), e.status === 'Deceased' && (PHP.isFilled(e.ageDeath) ? `Deceased at ${e.ageDeath}` : 'Deceased')]
+            .filter(Boolean)
+            .join(' · '),
       },
     },
 
@@ -364,10 +398,11 @@
         fields: [
           { k: 'name', label: 'Vaccine', type: 'select', opts: VACCINES, w: 'half' },
           { k: 'date', label: 'Date', type: 'date', w: 'half' },
+          { k: 'location', label: 'Administered at', type: 'text', ph: 'e.g. pharmacy or doctor\'s office', w: 'full', suggest: () => PHP.officeNames() },
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
         title_: (e) => PHP.ov(e, 'name'),
-        sub: (e) => PHP.fmtDate(e.date),
+        sub: (e) => [PHP.fmtDate(e.date), e.location].filter((x) => PHP.isFilled(x)).join(' · '),
       },
     },
 
@@ -413,7 +448,8 @@
         pastSortBy: 'end',
         fields: [
           { k: 'current', label: 'Currently seeing', type: 'check', w: 'full', meta: true, defaultOn: true },
-          { k: 'name', label: 'Name', type: 'text', w: 'half' },
+          { k: 'prefix', label: 'Prefix', type: 'select', opts: PREFIXES, w: 'third' },
+          { k: 'name', label: 'Name', type: 'text', w: 'twothird' },
           { k: 'specialty', label: 'Specialty', type: 'select', opts: SPECIALTIES, w: 'half' },
           { k: 'office', label: 'Office', type: 'text', w: 'half', suggest: () => PHP.officeNames() },
           { k: 'phone', label: 'Phone', type: 'phone', w: 'half' },
@@ -423,7 +459,10 @@
           { k: 'reason', label: 'Reason for leaving', type: 'text', w: 'full', showIf: notCurrent },
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
-        merge: [{ label: 'Office', keys: ['office', 'street', 'unit', 'city', 'state', 'zip'], join: (t) => [t.office, oneLine(t).join(', ')].filter(Boolean).join('\n') }],
+        merge: [
+          { label: 'Name', keys: ['prefix', 'name'], join: (t) => [t.prefix, t.name].filter(Boolean).join(' ') },
+          { label: 'Office', keys: ['office', 'street', 'unit', 'city', 'state', 'zip'], join: (t) => [t.office, oneLine(t).join(', ')].filter(Boolean).join('\n') },
+        ],
         // Typing an office that is already listed fills in its address and phone
         autofill: (e, k) => {
           if (k !== 'office' || !PHP.isFilled(e.office)) return null;
@@ -436,8 +475,8 @@
           if (!PHP.isFilled(e.phone) && PHP.isFilled(m.phone)) out.phone = m.phone;
           return out;
         },
-        title_: (e) => e.name || e.office,
-        sub: (e) => [PHP.ov(e, 'specialty'), e.name && e.office, !PHP.isCurrent(e) && range(e.start, e.end)].filter(Boolean).join(' · '),
+        title_: (e) => PHP.providerName(e) || e.office,
+        sub: (e) => [PHP.ov(e, 'specialty'), PHP.providerName(e) && e.office, !PHP.isCurrent(e) && range(e.start, e.end)].filter(Boolean).join(' · '),
       },
     },
 
@@ -718,7 +757,7 @@
   ];
 
   // Display order: core sections, then any optional sections the person added, with Notes & Questions always last
-  const ORDER = ['basic', 'lifestyle', 'family', 'conditions', 'meds', 'surgeries', 'immunizations', 'allergies', 'providers', 'insurance', 'emergency'];
+  const ORDER = ['basic', 'conditions', 'lifestyle', 'family', 'meds', 'surgeries', 'immunizations', 'allergies', 'providers', 'insurance', 'emergency'];
   const LAST = 'notes';
   const defined = new Map(SECTIONS.map((s, i) => [s.id, i]));
   const rank = (s) => (s.id === LAST ? 1e6 : ORDER.includes(s.id) ? ORDER.indexOf(s.id) : ORDER.length + defined.get(s.id));
@@ -738,14 +777,17 @@
   PHP.isFilled = (v) => v === true || (typeof v === 'string' && v.replace(/-/g, '').trim() !== '');
   PHP.visibleFields = (fields, obj) => fields.filter((f) => !f.showIf || f.showIf(obj || {}));
 
+  const groupItems = (f, obj) => (Array.isArray(obj[f.k]) ? obj[f.k] : []).filter((it) => f.fields.some((sf) => PHP.fieldFilled(sf, it)));
   PHP.fieldFilled = (f, obj) => {
     if (f.type === 'heading') return false;
+    if (f.type === 'group') return groupItems(f, obj).length > 0;
     if (f.type === 'checklist') return f.items.some((i) => obj[i.k] === true);
     return PHP.isFilled(obj[f.k]);
   };
   PHP.fieldText = (f, obj) => {
     const v = obj[f.k];
     if (f.type === 'heading') return '';
+    if (f.type === 'group') return groupItems(f, obj).map((it) => (f.format ? f.format(it) : f.fields.map((sf) => PHP.fieldText(sf, it)).filter(Boolean).join(', '))).join('\n');
     if (f.type === 'checklist')
       return f.items
         .filter((i) => obj[i.k] === true)
@@ -788,7 +830,7 @@
         cols.push({
           label: f.pdfLabel || f.label,
           k: f.k,
-          long: f.type === 'long' || f.type === 'checklist',
+          long: f.type === 'long' || f.type === 'checklist' || f.type === 'group',
           type: f.type,
           text: (o) => (vis(o) ? PHP.fieldText(f, o) : ''),
           filled: (o) => vis(o) && PHP.fieldFilled(f, o),
@@ -933,9 +975,54 @@
         if (short) e.name = short;
         else (e.nameOther = e.name), (e.name = 'Other');
       }
-      if (PHP.isFilled(e.where)) addNote(e, 'Given at: ' + e.where);
+      if (PHP.isFilled(e.where) && !PHP.isFilled(e.location)) e.location = e.where.trim();
       delete e.where;
+      // An earlier version moved "Given at" into notes; move it back to its own field
+      if (!PHP.isFilled(e.location) && PHP.isFilled(e.notes)) {
+        const lines = e.notes.split('\n');
+        const i = lines.findIndex((l) => /^Given at: /.test(l));
+        if (i >= 0) {
+          e.location = lines[i].replace(/^Given at: /, '').trim();
+          lines.splice(i, 1);
+          e.notes = lines.join('\n');
+          if (!PHP.isFilled(e.notes)) delete e.notes;
+        }
+      }
     });
+
+    // Providers: a title typed into the name ("Dr. Patel") becomes the prefix
+    ((d.providers && d.providers.lists && d.providers.lists.main) || []).forEach((p) => {
+      if (PHP.isFilled(p.prefix) || !PHP.isFilled(p.name)) return;
+      const m = p.name.trim().match(/^(Dr|Mr|Mrs|Ms|Mx|Prof)\.?\s+(.+)$/i);
+      if (m) {
+        p.prefix = PREFIXES.find((x) => x.toLowerCase() === m[1].toLowerCase() + '.');
+        p.name = m[2];
+      }
+    });
+
+    // Family history: one entry per relative, each with any number of conditions
+    const fam = d.family && d.family.lists && d.family.lists.main;
+    if (fam && fam.some((e) => !Array.isArray(e.conditions))) {
+      const merged = [];
+      const byKey = new Map();
+      fam.forEach((e) => {
+        if (Array.isArray(e.conditions)) return merged.push(e);
+        const typed = String(e.rel || '').trim();
+        const hit = RELATIVES.find((r) => r !== 'Other' && r.toLowerCase() === typed.toLowerCase());
+        const cond = { name: e.name, age: e.age, notes: e.notes };
+        const hasCond = Object.values(cond).some((x) => PHP.isFilled(x));
+        const key = typed.toLowerCase() + '|' + (e.status || '');
+        if (typed && byKey.has(key)) {
+          if (hasCond) byKey.get(key).conditions.push(cond);
+          return;
+        }
+        const entry = { id: e.id, rel: hit || (typed ? 'Other' : ''), status: e.status, conditions: hasCond ? [cond] : [] };
+        if (!hit && typed) entry.relOther = typed;
+        if (typed) byKey.set(key, entry);
+        merged.push(entry);
+      });
+      d.family.lists.main = merged;
+    }
 
     // Lifestyle: earlier fill-in answers mapped onto the new questions
     const ls = d.lifestyle && d.lifestyle.values;
