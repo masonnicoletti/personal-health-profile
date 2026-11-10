@@ -471,8 +471,8 @@
       ['Date of birth', PHP.isFilled(b.dob) && PHP.fmtDate(b.dob) + ageStr(b.dob)],
       ['Blood type', PHP.ov(b, 'blood')],
       ['Sex', PHP.ov(b, 'sex')],
-      ['Height', PHP.fmtHeight(b.height)],
-      ['Weight', PHP.isFilled(b.weight) && b.weight + ' lb'],
+      ['Height', PHP.fmtHeight(b.height, b.heightUnit)],
+      ['Weight', PHP.isFilled(b.weight) && `${b.weight} ${b.weightUnit || 'lb'}`],
       ['Organ donor', PHP.ov(b, 'donor')],
       ['Phone', b.phone],
     ].filter(([, v]) => PHP.isFilled(v || ''));

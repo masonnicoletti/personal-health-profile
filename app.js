@@ -59,6 +59,7 @@
   let state = load();
   PHP.getState = () => state;
   const editing = new Set(); // entry ids currently open for editing (not saved)
+  const fresh = new Set(); // entries just added: shown at the bottom of their list until Done
 
   let saveTimer;
   let dirty = false;
@@ -87,6 +88,7 @@
     try {
       state = normalize(JSON.parse(e.newValue));
       editing.clear();
+      fresh.clear();
       renderAll();
     } catch (err) {
       /* ignore unreadable data */
@@ -114,6 +116,7 @@
     state = normalize(JSON.parse(undoSnap));
     undoSnap = null;
     editing.clear();
+    fresh.clear();
     save();
     renderAll();
     hideToast();
@@ -133,15 +136,47 @@
   }
 
   /* ---------- Fields ---------- */
+  // Which collapsible groups (e.g. Lifestyle's Sleep, Activity…) are open; on screen only, not saved
+  const openGroups = new Set();
+
   function fieldGrid(fields, obj, changed, autofill) {
     const grid = h('div', { class: 'grid' });
     const els = [];
     const byKey = {};
+    const groupOf = new Map(); // field -> the collapsible heading above it
+    const toggles = []; // [heading, button, its fields]
+    let current = null;
     for (const f of fields) {
+      if (f.type === 'heading') current = f.collapsible ? f : null;
+      if (f.type === 'heading' && f.collapsible) {
+        // A heading that opens and closes the questions under it, with a count of what's answered
+        const btn = h(
+          'button',
+          {
+            type: 'button',
+            class: 'group-toggle',
+            'aria-expanded': String(openGroups.has(f.label)),
+            onclick: () => {
+              if (openGroups.has(f.label)) openGroups.delete(f.label);
+              else openGroups.add(f.label);
+              refresh();
+            },
+          },
+          h('span', { class: 'group-name', text: f.label }),
+          h('span', { class: 'group-count' })
+        );
+        const holder = h('div', { class: 'f full group-head' }, btn);
+        grid.append(holder);
+        toggles.push([f, btn, []]);
+        continue;
+      }
       const el = field(f, obj, () => onField(f.k));
       grid.append(el);
       els.push([f, el]);
       byKey[f.k] = el;
+      const g = f.ungrouped ? null : current;
+      groupOf.set(f, g);
+      if (g) toggles[toggles.length - 1][2].push(f);
     }
     function onField(k) {
       const out = autofill && autofill(obj, k);
@@ -154,7 +189,17 @@
       changed();
     }
     function refresh() {
-      for (const [f, el] of els) el.hidden = f.showIf ? !f.showIf(obj) : false;
+      for (const [f, el] of els) {
+        const g = groupOf.get(f);
+        el.hidden = (f.showIf ? !f.showIf(obj) : false) || (!!g && !openGroups.has(g.label));
+      }
+      for (const [g, btn, members] of toggles) {
+        const open = openGroups.has(g.label);
+        btn.setAttribute('aria-expanded', String(open));
+        btn.parentElement.classList.toggle('open', open);
+        const n = members.filter((f) => (!f.showIf || f.showIf(obj)) && PHP.fieldFilled(f, obj)).length;
+        btn.querySelector('.group-count').textContent = n ? `${n} answered` : '';
+      }
     }
     refresh();
     return grid;
@@ -172,7 +217,7 @@
       const cb = h('input', { type: 'checkbox', id });
       cb.checked = f.defaultOn ? obj[f.k] !== false : !!obj[f.k];
       cb.addEventListener('change', () => set(cb.checked));
-      wrap.append(h('label', { class: 'check', for: id }, cb, f.label));
+      wrap.append(h('label', { class: f.meta ? 'check check-lg' : 'check', for: id }, cb, f.label));
       return wrap;
     }
     if (f.type === 'date') {
@@ -239,26 +284,62 @@
       wrap.append(h('h3', { text: f.label }));
       return wrap;
     }
+    // Unit dropdown for height and weight. Switching converts what was entered; the choice is stored as <key>Unit.
+    const unitPicker = (options, onSwitch) => {
+      const sel = h('select', { class: 'unit-select', 'aria-label': f.label + ' units' }, options.map(([value, text]) => h('option', { value, text })));
+      sel.value = obj[f.k + 'Unit'] || '';
+      sel.addEventListener('change', () => {
+        onSwitch(sel.value);
+        if (sel.value) obj[f.k + 'Unit'] = sel.value;
+        else delete obj[f.k + 'Unit'];
+        changed();
+      });
+      return sel;
+    };
+
     if (f.type === 'height') {
-      const [ft0, in0] = String(obj[f.k] || '').split('-');
-      const part = (val, max, unit, aria) => {
+      const box = h('div', { class: 'height' });
+      const digits = (val, max, unit, aria, onInput) => {
         const i = h('input', { type: 'text', inputmode: 'numeric', maxlength: String(max), 'aria-label': aria });
         i.value = val || '';
         i.addEventListener('input', () => {
           i.value = i.value.replace(/\D/g, '');
-          const ft = feet.value;
-          const inch = inches.value;
-          set(ft || inch ? `${ft}-${inch}` : '');
+          onInput();
         });
         return h('span', { class: 'unit-input' }, i, h('span', { class: 'unit', text: unit }));
       };
-      const ftWrap = part(ft0, 1, 'ft', f.label + ', feet');
-      const inWrap = part(in0, 2, 'in', f.label + ', inches');
-      const feet = ftWrap.querySelector('input');
-      const inches = inWrap.querySelector('input');
+      // Feet and inches boxes, or a single centimetres box
+      const draw = () => {
+        if (obj[f.k + 'Unit'] === 'cm') {
+          const cm = digits(obj[f.k], 3, '', f.label + ', centimetres', () => set(cm.querySelector('input').value));
+          box.replaceChildren(cm);
+          return;
+        }
+        const [ft0, in0] = String(obj[f.k] || '').split('-');
+        const both = () => {
+          const ft = ftWrap.querySelector('input').value;
+          const inch = inWrap.querySelector('input').value;
+          set(ft || inch ? `${ft}-${inch}` : '');
+        };
+        const ftWrap = digits(ft0, 1, 'ft', f.label + ', feet', both);
+        const inWrap = digits(in0, 2, 'in', f.label + ', inches', both);
+        box.replaceChildren(ftWrap, inWrap);
+      };
+      const units = unitPicker(
+        [
+          ['', 'ft / in'],
+          ['cm', 'cm'],
+        ],
+        (to) => {
+          obj[f.k] = PHP.convertHeight(obj[f.k], to);
+          obj[f.k + 'Unit'] = to; // so draw() shows the new boxes
+          draw();
+        }
+      );
+      draw();
       wrap.setAttribute('role', 'group');
       wrap.setAttribute('aria-labelledby', id + 'l');
-      wrap.append(h('span', { class: 'lbl', id: id + 'l', text: f.label }), h('div', { class: 'height' }, ftWrap, inWrap));
+      wrap.append(h('span', { class: 'lbl', id: id + 'l', text: f.label }), h('div', { class: 'with-units' }, box, units));
       return wrap;
     }
     if (f.type === 'number') {
@@ -270,7 +351,19 @@
         set(clean);
       });
       wrap.setVal = (v) => (input.value = v);
-      wrap.append(h('label', { for: id, text: f.label }), f.unit ? h('span', { class: 'unit-input' }, input, h('span', { class: 'unit', text: f.unit })) : input);
+      let control = input;
+      if (f.units) {
+        // First unit is the default and is not stored; e.g. lb, or kg once chosen
+        const units = unitPicker(
+          f.units.map((u, i) => [i === 0 ? '' : u, u]),
+          (to) => {
+            obj[f.k] = PHP.convertWeight(obj[f.k], to || f.units[0]);
+            input.value = obj[f.k];
+          }
+        );
+        control = h('div', { class: 'with-units' }, input, units);
+      } else if (f.unit) control = h('span', { class: 'unit-input' }, input, h('span', { class: 'unit', text: f.unit }));
+      wrap.append(h('label', { for: id, text: f.label }), control);
       return wrap;
     }
 
@@ -578,7 +671,7 @@
       return block;
     }
 
-    const items = PHP.sortEntries(L, arr);
+    const items = PHP.sortEntries(L, arr.filter((e) => !fresh.has(e.id))).concat(arr.filter((e) => fresh.has(e.id)));
     if (items.length) block.append(group(items));
     else if (!L.noneLabel) block.append(h('p', { class: 'empty-note', text: 'None added yet.' }));
     block.append(addBtn);
@@ -738,6 +831,7 @@
     const e = { id: uid() };
     listArr(sec.id, L.key).push(e);
     editing.add(e.id);
+    fresh.add(e.id);
     state.open[sec.id] = true;
     save();
     rerender(sec.id);
@@ -746,6 +840,7 @@
 
   function done(sec, L, e) {
     editing.delete(e.id);
+    fresh.delete(e.id);
     if (!PHP.entryHasData(L, e)) {
       const arr = listArr(sec.id, L.key);
       arr.splice(arr.indexOf(e), 1);
@@ -926,6 +1021,7 @@
     goForm();
     renderAll();
     const e = { id: uid(), date: PHP.todayISO() };
+    fresh.add(e.id);
     listArr(id, sec.list.key).push(e);
     editing.add(e.id);
     save();
@@ -1008,6 +1104,7 @@
     snapshot();
     state = next;
     editing.clear();
+    fresh.clear();
     save();
     renderAll();
     window.scrollTo({ top: 0 });

@@ -48,6 +48,8 @@ Scripts load in order from `index.html` and share one global namespace, `window.
     - `noneLabel`: a "No known …" checkbox.
 - **Field types:** `text`, `long`, `date`, `phone`, `number` (optional `unit`), `height`, `select`, `check`, `checklist`, `heading`, `group` (a repeating set of sub-fields stored as an array on the entry, e.g. a relative's conditions; `format(item)` controls its PDF text).
   - Field options: `showIf(values)` for conditional fields, `suggest()` for datalist suggestions, `pdfLabel` for a shorter PDF label.
+  - `units: ['lb', 'kg']` on a number field (and the built-in ft/in or cm choice on `height`) adds a unit dropdown. The choice is stored as `<key>Unit` (absent means the first unit), and switching converts the value (`PHP.convertWeight`, `PHP.convertHeight`).
+  - `{ type: 'heading', collapsible: true }` turns the fields below it, up to the next heading, into a group that opens and closes (Lifestyle). Groups start closed and show "N answered"; open state is on-screen only. `ungrouped: true` keeps a field outside any group.
   - Any `select` whose options include `'Other'` automatically gets a text box stored at `<key>Other`. Use `PHP.ov(obj, key)` to read the effective value.
   - Select `opts` can be a function (e.g. offices and providers come from the Providers section via `PHP.getState()`).
 - **List options:** `merge` combines several fields into one PDF column (names, addresses), and `autofill(entry, changedKey)` pre-fills fields (providers copy address and phone from a matching office).
@@ -69,7 +71,7 @@ Scripts load in order from `index.html` and share one global namespace, `window.
 - Renders two screens, toggled by `location.hash` (`#form`) with `history` entries so the back gesture works:
   - Home: Get Started, which opens the tutorial, or Update Profile plus quick actions.
   - Form.
-- Section changes re-render the whole section via `rerender(id)`. The `editing` set (which entries are open for editing) is UI-only and not saved.
+- Section changes re-render the whole section via `rerender(id)`. The `editing` set (which entries are open for editing) is UI-only and not saved. A new entry (`fresh` set) stays at the bottom of its list until Done, then takes its sorted place; undated entries sort last.
 - Dialogs (Save PDF, preview, Settings, Share, Privacy, Instructions, tutorial, confirm) are native `<dialog>` elements. `.panel` dialogs fill the screen on phones. Close a dialog before showing a toast, because the modal's top layer hides it.
 - Destructive actions call `snapshot()` first, then show an Undo toast.
 

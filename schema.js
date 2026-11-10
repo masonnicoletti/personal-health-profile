@@ -35,7 +35,7 @@
   };
   PHP.dateSortKey = function (v) {
     const { y, m, d } = PHP.parseDate(v);
-    if (!y) return Infinity; // undated entries float to the top while being filled in
+    if (!y) return -Infinity; // undated entries sort to the bottom of newest-first lists
     return parseInt(y, 10) * 10000 + (parseInt(m, 10) || 0) * 100 + (parseInt(d, 10) || 0);
   };
   PHP.fmtPhone = function (v) {
@@ -47,10 +47,28 @@
     if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
     return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
   };
-  // Height is stored as "feet-inches", either part may be blank
-  PHP.fmtHeight = function (v) {
+  // Height is stored as "feet-inches" (either part may be blank), or as centimetres when its unit is "cm"
+  PHP.fmtHeight = function (v, unit) {
+    if (unit === 'cm') return PHP.isFilled(v) ? `${String(v).trim()} cm` : '';
     const [ft, inch] = String(v || '').split('-');
     return [ft && ft + ' ft', inch && inch + ' in'].filter(Boolean).join(' ');
+  };
+  // Converting between units keeps what was entered when someone switches the unit dropdown
+  PHP.convertHeight = function (v, toUnit) {
+    if (toUnit === 'cm') {
+      const [ft, inch] = String(v || '').split('-');
+      const totalIn = (+ft || 0) * 12 + (+inch || 0);
+      return totalIn ? String(Math.round(totalIn * 2.54)) : '';
+    }
+    const cm = parseFloat(v);
+    if (!cm) return '';
+    const totalIn = Math.round(cm / 2.54);
+    return `${Math.floor(totalIn / 12)}-${totalIn % 12}`;
+  };
+  PHP.convertWeight = function (v, toUnit) {
+    const n = parseFloat(v);
+    if (!n) return '';
+    return toUnit === 'kg' ? String(Math.round(n * 0.45359237 * 10) / 10) : String(Math.round(n / 0.45359237));
   };
 
   // Value of a select, with the typed text when "Other" was chosen
@@ -225,7 +243,7 @@
         { k: 'sex', label: 'Sex', type: 'select', opts: ['Female', 'Male', 'Other'], w: 'third' },
         { k: 'marital', label: 'Marital status', type: 'select', opts: ['Single', 'Married', 'Partnered', 'Divorced', 'Separated', 'Widowed'], w: 'third' },
         { k: 'height', label: 'Height', type: 'height', w: 'third' },
-        { k: 'weight', label: 'Weight', type: 'number', unit: 'lb', w: 'third' },
+        { k: 'weight', label: 'Weight', type: 'number', units: ['lb', 'kg'], w: 'third' },
         { k: 'blood', label: 'Blood type', type: 'select', opts: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'], w: 'third' },
         { k: 'phone', label: 'Phone', type: 'phone', w: 'third' },
         { k: 'email', label: 'Email', type: 'text', w: 'third' },
@@ -244,14 +262,30 @@
 
     {
       id: 'lifestyle',
-      title: 'Lifestyle & Social',
+      title: 'Lifestyle',
       kind: 'profile',
       info: {
         what: 'A few questions about daily habits, work and home life.',
         why: 'Habits, sleep, stress and support at home all shape your health and care options.',
       },
+      // Each collapsible heading opens the questions below it, up to the next heading
       fields: [
-        { type: 'heading', label: 'Habits' },
+        { type: 'heading', label: 'Sleep', collapsible: true },
+        { k: 'sleepHours', label: 'Hours of sleep per night', pdfLabel: 'Sleep per night', type: 'number', unit: 'hours', w: 'half' },
+        { k: 'sleepQuality', label: 'How well do you sleep?', pdfLabel: 'Sleep quality', type: 'select', opts: ['Well', 'Fairly well', 'Poorly'], w: 'half' },
+        { k: 'sleepTrouble', label: 'Trouble sleeping', type: 'check', w: 'full' },
+        { k: 'sleepDesc', label: 'What kind of trouble?', pdfLabel: 'Sleep trouble', type: 'text', ph: 'e.g. waking at night, snoring', w: 'full', showIf: (v) => v.sleepTrouble === true },
+
+        { type: 'heading', label: 'Activity', collapsible: true },
+        { k: 'activity', label: 'How physically active are you?', pdfLabel: 'Physical activity', type: 'select', opts: ['Not active', 'Lightly active', 'Moderately active', 'Very active'], w: 'half' },
+        { k: 'activityType', label: 'What do you do?', pdfLabel: 'Activity type', type: 'text', ph: 'e.g. walking, swimming', w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
+        { k: 'activityDays', label: 'Days per week', type: 'select', opts: ['1', '2', '3', '4', '5', '6', '7'], w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
+        { k: 'activityMins', label: 'Minutes each time', type: 'number', w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
+        { k: 'mobility', label: 'Do you use a mobility aid?', pdfLabel: 'Mobility aid', type: 'select', opts: ['No', 'Cane', 'Walker', 'Wheelchair', 'Other'], w: 'half' },
+        { k: 'falls', label: 'Any falls in the past year?', pdfLabel: 'Falls in past year', type: 'select', opts: ['No', 'Yes'], w: 'half' },
+        { k: 'fallCount', label: 'How many?', pdfLabel: 'Number of falls', type: 'number', w: 'half', showIf: (v) => v.falls === 'Yes' },
+
+        { type: 'heading', label: 'Habits', collapsible: true },
         { k: 'smoking', label: 'Do you use tobacco?', pdfLabel: 'Tobacco', type: 'select', opts: ['Never', 'Used to', 'Yes'], w: 'half' },
         { k: 'tobaccoType', label: 'What kind?', pdfLabel: 'Tobacco type', type: 'select', opts: ['Cigarettes', 'Cigars', 'Pipe', 'Chewing tobacco', 'Vaping', 'Other'], w: 'half', showIf: (v) => v.smoking === 'Yes' },
         { k: 'amount', label: 'How much per day?', pdfLabel: 'Amount per day', type: 'text', w: 'half', showIf: (v) => v.smoking === 'Yes' },
@@ -264,32 +298,25 @@
         { k: 'drugsDesc', label: 'What and how often?', pdfLabel: 'Details', type: 'text', w: 'full', showIf: (v) => v.drugs === 'Yes' || v.drugs === 'Used to' },
         { k: 'diet', label: 'Do you follow a special diet?', pdfLabel: 'Diet', type: 'select', opts: ['No', 'Low sodium', 'Low sugar or diabetic', 'Heart healthy', 'Low fat', 'Vegetarian', 'Vegan', 'Gluten free', 'Other'], w: 'half' },
 
-        { type: 'heading', label: 'Activity & sleep' },
-        { k: 'activity', label: 'How physically active are you?', pdfLabel: 'Physical activity', type: 'select', opts: ['Not active', 'Lightly active', 'Moderately active', 'Very active'], w: 'half' },
-        { k: 'activityType', label: 'What do you do?', pdfLabel: 'Activity type', type: 'text', ph: 'e.g. walking, swimming', w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
-        { k: 'activityDays', label: 'Days per week', type: 'select', opts: ['1', '2', '3', '4', '5', '6', '7'], w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
-        { k: 'activityMins', label: 'Minutes each time', type: 'number', w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
-        { k: 'mobility', label: 'Do you use a mobility aid?', pdfLabel: 'Mobility aid', type: 'select', opts: ['No', 'Cane', 'Walker', 'Wheelchair', 'Other'], w: 'half' },
-        { k: 'falls', label: 'Any falls in the past year?', pdfLabel: 'Falls in past year', type: 'select', opts: ['No', 'Yes'], w: 'half' },
-        { k: 'fallCount', label: 'How many?', pdfLabel: 'Number of falls', type: 'number', w: 'half', showIf: (v) => v.falls === 'Yes' },
-        { k: 'sleepHours', label: 'Hours of sleep per night', pdfLabel: 'Sleep per night', type: 'number', unit: 'hours', w: 'half' },
-        { k: 'sleepQuality', label: 'How well do you sleep?', pdfLabel: 'Sleep quality', type: 'select', opts: ['Well', 'Fairly well', 'Poorly'], w: 'half' },
-        { k: 'sleepTrouble', label: 'Trouble sleeping', type: 'check', w: 'full' },
-        { k: 'sleepDesc', label: 'What kind of trouble?', pdfLabel: 'Sleep trouble', type: 'text', ph: 'e.g. waking at night, snoring', w: 'full', showIf: (v) => v.sleepTrouble === true },
+        { type: 'heading', label: 'Stress', collapsible: true },
         { k: 'stress', label: 'How would you rate your stress?', pdfLabel: 'Stress', type: 'select', opts: ['Low', 'Moderate', 'High'], w: 'half' },
         { k: 'stressDesc', label: 'Main sources of stress', type: 'text', w: 'half', showIf: (v) => v.stress === 'Moderate' || v.stress === 'High' },
 
-        { type: 'heading', label: 'Work & home' },
+        { type: 'heading', label: 'Occupation', collapsible: true },
         { k: 'work', label: 'Work status', type: 'select', opts: ['Working full time', 'Working part time', 'Retired', 'Not working', 'Disabled', 'Student', 'Homemaker', 'Other'], w: 'half' },
         { k: 'occupation', label: 'Occupation', type: 'text', w: 'half', showIf: (v) => /^Working|^Student/.test(v.work || '') },
         { k: 'formerOccupation', label: 'Former occupation', type: 'text', w: 'half', showIf: (v) => /^(Retired|Not working|Disabled)$/.test(v.work || '') },
+
+        { type: 'heading', label: 'Home', collapsible: true },
         { k: 'living', label: 'Who do you live with?', pdfLabel: 'Living situation', type: 'select', opts: ['Live alone', 'Spouse or partner', 'Family', 'Assisted living', 'Nursing home', 'Other'], w: 'half' },
         { k: 'caregiver', label: 'Do you have a caregiver?', pdfLabel: 'Caregiver', type: 'select', opts: ['No', 'Yes'], w: 'half' },
         { k: 'caregiverName', label: 'Caregiver name and phone', pdfLabel: 'Caregiver details', type: 'text', w: 'half', showIf: (v) => v.caregiver === 'Yes' },
         { k: 'help', label: 'Do you need help with daily tasks?', pdfLabel: 'Help with daily tasks', type: 'select', opts: ['No', 'Some', 'Often'], w: 'half' },
         { k: 'helpDesc', label: 'Which tasks?', pdfLabel: 'Tasks', type: 'text', ph: 'e.g. bathing, shopping, driving', w: 'half', showIf: (v) => v.help === 'Some' || v.help === 'Often' },
         { k: 'driving', label: 'Do you drive?', pdfLabel: 'Driving', type: 'select', opts: ['Yes', 'Daytime only', 'No'], w: 'half' },
-        { k: 'notes', label: 'Anything else', pdfLabel: 'Notes', type: 'long', w: 'full' },
+
+        // Always visible, outside the groups
+        { k: 'notes', label: 'Anything else', pdfLabel: 'Notes', type: 'long', w: 'full', ungrouped: true },
       ],
     },
 
@@ -767,12 +794,12 @@
           { k: 'date', label: 'Date', type: 'date', w: 'half' },
           { k: 'bp', label: 'Blood pressure', type: 'text', w: 'half', ph: '120/80' },
           { k: 'pulse', label: 'Pulse', type: 'number', w: 'third' },
-          { k: 'weight', label: 'Weight', type: 'number', unit: 'lb', w: 'third' },
+          { k: 'weight', label: 'Weight', type: 'number', units: ['lb', 'kg'], w: 'third' },
           { k: 'glucose', label: 'Glucose', type: 'number', w: 'third' },
           { k: 'notes', label: 'Notes', type: 'text', w: 'full' },
         ],
         title_: (e) => [e.bp && 'BP ' + e.bp, e.pulse && 'Pulse ' + e.pulse].filter(Boolean).join(' · ') || PHP.fmtDate(e.date),
-        sub: (e) => [PHP.fmtDate(e.date), e.weight && e.weight + ' lb', e.glucose && 'Glucose ' + e.glucose].filter(Boolean).join(' · '),
+        sub: (e) => [PHP.fmtDate(e.date), e.weight && `${e.weight} ${e.weightUnit || 'lb'}`, e.glucose && 'Glucose ' + e.glucose].filter(Boolean).join(' · '),
       },
     },
     {
@@ -879,11 +906,13 @@
         .map((i) => (PHP.isFilled(obj[i.k + 'Note']) ? `${i.label}: ${obj[i.k + 'Note'].trim()}` : i.label))
         .join('\n');
     if (f.type === 'date') return PHP.fmtDate(v);
-    if (f.type === 'height') return PHP.fmtHeight(v);
+    if (f.type === 'height') return PHP.fmtHeight(v, obj[f.k + 'Unit']);
     if (f.type === 'check') return v ? 'Yes' : '';
     if (f.type === 'select') return PHP.ov(obj, f.k);
     const s = String(v == null ? '' : v).trim();
-    return f.unit && s ? `${s} ${f.unit}` : s;
+    // A fixed unit, or the one chosen from the field's unit dropdown (the first is the default)
+    const unit = f.units ? obj[f.k + 'Unit'] || f.units[0] : f.unit;
+    return unit && s ? `${s} ${unit}` : s;
   };
   PHP.entryHasData = (L, e) => PHP.visibleFields(L.fields, e).some((f) => !f.meta && PHP.fieldFilled(f, e));
   PHP.sectionHasData = (sec, d) => {

@@ -52,6 +52,19 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await weight.type('15o2');
   let v = (await S()).data.basic.values;
   ok(v.height === '5-6' && v.weight === '152', `height and weight saved as numbers: ${v.height} / ${v.weight}`);
+  // Unit dropdowns: switching converts what was entered
+  const unitSel = (label) => page.evaluateHandle((label) => [...document.querySelectorAll('#sec-basic .f')].find((f) => ((f.querySelector('label, .lbl') || {}).textContent) === label).querySelector('select.unit-select'), label);
+  ok(JSON.stringify(await (await unitSel('Height')).evaluate((s) => [...s.options].map((o) => o.text))) === '["ft / in","cm"]', 'height units: ft / in or cm');
+  await (await unitSel('Height')).select('cm');
+  await (await unitSel('Weight')).select('kg');
+  v = (await S()).data.basic.values;
+  ok(v.height === '168' && v.heightUnit === 'cm' && v.weight === '68.9' && v.weightUnit === 'kg', `switching units converts: ${v.height} ${v.heightUnit}, ${v.weight} ${v.weightUnit}`);
+  ok((await page.$$('#sec-basic .height input')).length === 1, 'centimetres use a single box');
+  ok((await page.evaluate(() => { const s = PHP.sectionById('basic'); const o = PHP._debug.state.data.basic.values; return PHP.outputCols(s.fields, s.merge).filter((c) => /Height|Weight/.test(c.label)).map((c) => c.text(o)).join(' / '); })) === '168 cm / 68.9 kg', 'PDF shows the chosen units');
+  await (await unitSel('Height')).select('');
+  await (await unitSel('Weight')).select('');
+  v = (await S()).data.basic.values;
+  ok(v.height === '5-6' && v.weight === '152' && !v.heightUnit && !v.weightUnit, `and back: ${v.height}, ${v.weight}`);
 
   // Phone formatting and "Other" boxes still work
   const phone = await page.$('#sec-basic input[type=tel]');
@@ -62,11 +75,18 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.keyboard.type('Ontario');
   ok((await S()).data.basic.values.stateOther === 'Ontario', 'Other opens a text box');
 
-  // Lifestyle questionnaire reveals follow-ups
+  // Lifestyle: six groups that open and close, with follow-up questions inside
   await open('lifestyle');
   const ls = '#sec-lifestyle';
-  ok((await page.$$eval(ls + ' .f.heading h3', (hs) => hs.map((x) => x.textContent))).join() === 'Habits,Activity & sleep,Work & home', 'lifestyle grouped into topics');
+  ok((await page.$eval(ls + ' h2', (x) => x.textContent)) === 'Lifestyle', 'section is titled Lifestyle');
+  const groupNames = await page.$$eval(ls + ' .group-toggle .group-name', (gs) => gs.map((g) => g.textContent));
+  ok(groupNames.join() === 'Sleep,Activity,Habits,Stress,Occupation,Home', 'lifestyle groups: ' + groupNames.join(', '));
   let lsl = await labels(ls);
+  ok(lsl.join() === 'Anything else', 'groups start closed; only "Anything else" shows: ' + lsl.join(', '));
+  // Open every group
+  for (const g of groupNames) await clickText(ls + ' .group-toggle .group-name', g);
+  ok((await page.$$eval(ls + ' .group-toggle', (bs) => bs.every((b) => b.getAttribute('aria-expanded') === 'true'))), 'groups open when tapped');
+  lsl = await labels(ls);
   ok(!lsl.includes('Year you quit') && !lsl.includes('What do you do?') && !lsl.includes('What kind of trouble?'), 'follow-up questions hidden at first');
   const lsSel = async (labelText, value) => page.evaluate((ls, labelText, value) => {
     const f = [...document.querySelectorAll(ls + ' .f')].find((x) => x.querySelector('label') && x.querySelector('label').textContent === labelText);
@@ -79,6 +99,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   lsl = await labels(ls);
   ok(['Year you quit', 'What do you do?', 'Days per week', 'Former occupation', 'What kind of trouble?'].every((l) => lsl.includes(l)), 'answers open the right follow-ups');
   ok(['How well do you sleep?', 'How would you rate your stress?'].every((l) => lsl.includes(l)), 'sleep and stress questions present');
+  ok((await page.$eval(ls + ' .group-head:nth-of-type(1) .group-count, ' + ls + ' .group-toggle .group-count', (c) => c.textContent)) === '1 answered', 'a group shows how many questions are answered');
+  await clickText(ls + ' .group-toggle .group-name', 'Habits');
+  lsl = await labels(ls);
+  ok(!lsl.includes('Do you use tobacco?') && lsl.includes('How physically active are you?'), 'closing one group hides only its questions');
+  await (await page.$(ls)).screenshot({ path: OUT + '/v8-lifestyle.png' });
 
   // Medical History questionnaire
   await open('conditions');
@@ -119,7 +144,36 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await (await medSel('Form')).select('Tablet');
   const med = (await S()).data.meds.lists.main[0];
   ok(med.freq === 'As needed' && med.unit === 'mg' && med.form === 'Tablet', 'medication dropdowns saved');
+  const bigCheck = await page.$eval('#sec-meds .entry.editing .check-lg', (l) => ({ text: l.textContent.trim(), box: l.querySelector('input').getBoundingClientRect().width, size: parseFloat(getComputedStyle(l).fontSize) }));
+  ok(bigCheck.text === 'Currently taking' && bigCheck.box >= 26 && bigCheck.size > 18, 'larger "Currently taking" checkbox and text: ' + JSON.stringify(bigCheck));
   await page.click('#sec-meds .entry.editing .btn.primary');
+
+  // Surgeries: a new procedure stays at the bottom while it's being filled in, then takes its place by date
+  await open('surgeries');
+  const sg = '#sec-surgeries';
+  const addProcedure = async (name, year) => {
+    await page.click(sg + ' .btn.add');
+    await page.keyboard.type(name);
+    if (year) {
+      const yearBox = await page.$(sg + ' .entry.editing .date .yyyy');
+      await yearBox.type(year);
+    }
+  };
+  const cardTitles = () => page.$$eval(sg + ' .entry', (es) => es.map((e) => (e.classList.contains('editing') ? '[' + (e.querySelector('input').value || 'new') + ']' : e.querySelector('.t').textContent)));
+  await addProcedure('Knee scope', '2015');
+  await page.click(sg + ' .entry.editing .btn.primary');
+  await addProcedure('Hip replacement', '2020');
+  await page.click(sg + ' .entry.editing .btn.primary');
+  await page.click(sg + ' .btn.add');
+  ok((await cardTitles()).join() === 'Hip replacement,Knee scope,[new]', 'a new procedure opens at the bottom: ' + (await cardTitles()).join(', '));
+  await page.keyboard.type('Cataract surgery');
+  await (await page.$(sg + ' .entry.editing .date .yyyy')).type('2023');
+  ok((await cardTitles()).join() === 'Hip replacement,Knee scope,[Cataract surgery]', 'and stays there while its date is typed');
+  await page.click(sg + ' .entry.editing .btn.primary');
+  ok((await cardTitles()).join() === 'Cataract surgery,Hip replacement,Knee scope', 'after Done it sorts newest first: ' + (await cardTitles()).join(', '));
+  await addProcedure('Mole removal');
+  await page.click(sg + ' .entry.editing .btn.primary');
+  ok((await cardTitles()).slice(-1)[0] === 'Mole removal', 'procedures without a date stay at the bottom');
 
   // Immunizations: an additional section with a vaccine dropdown and "Administered at"
   ok(!(await page.$('#sec-immunizations')), 'Immunizations is not shown until added');
@@ -293,7 +347,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const lifestylePages = await page.evaluate(() => {
     const doc = PHP.buildPdf(PHP._debug.state, PHP.SECTIONS.map((s) => s.id), { save: false });
     const pages = doc.internal.pages.slice(1).map((p) => p.join('\n'));
-    return [pages.findIndex((p) => p.includes('(Lifestyle & Social)')), pages.findIndex((p) => p.includes('(Daytime only)'))];
+    return [pages.findIndex((p) => p.includes('(Lifestyle)')), pages.findIndex((p) => p.includes('(Daytime only)'))];
   });
   ok(lifestylePages[0] >= 0 && lifestylePages[0] === lifestylePages[1], 'Lifestyle is not split across pages: ' + lifestylePages.join(' / '));
 

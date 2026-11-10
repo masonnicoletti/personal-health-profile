@@ -478,7 +478,49 @@ dialog::backdrop { background: rgba(18, 48, 90, 0.35); }
 .unit-input { display: flex; align-items: center; gap: 8px; }
 .unit-input input { min-width: 0; }
 .unit { color: var(--sub); font-size: 0.89rem; white-space: nowrap; }
-.height { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 14em; }
+.height { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; flex: 1; min-width: 0; }
+/* Value boxes with a unit dropdown beside them (height, weight) */
+.with-units { display: flex; align-items: center; gap: 8px; }
+.with-units > input { flex: 1; min-width: 0; }
+select.unit-select { width: auto; flex: none; min-width: 5.4em; padding-left: 10px; }
+
+/* Collapsible question groups (Lifestyle) */
+.group-head { margin-top: 2px; }
+.group-toggle {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+}
+.group-toggle:hover { border-color: var(--accent); }
+.group-toggle:focus-visible { outline: none; box-shadow: var(--focus); }
+.group-name { font-weight: 700; font-size: 0.97rem; }
+.group-count { color: var(--sub); font-size: 0.83rem; margin-left: auto; }
+/* Small arrow drawn with borders, like the dropdown arrows; points down when closed, up when open */
+.group-toggle::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--sub);
+  border-bottom: 2px solid var(--sub);
+  transform: rotate(45deg) translate(-2px, -2px);
+  flex: none;
+}
+.group-head.open .group-toggle { border-color: var(--accent); background: var(--accent-soft); }
+.group-head.open .group-toggle::after { transform: rotate(225deg) translate(-2px, -2px); }
+
+/* "Currently taking", "Currently seeing", "Current condition" */
+.f > .check.check-lg { font-size: 1.05rem; font-weight: 600; color: var(--text); gap: 12px; min-height: 48px; }
+.check.check-lg input { width: 26px; height: 26px; }
 
 .questionnaire { padding: 4px 0 6px; }
 .q-prompt { font-weight: 600; margin-bottom: 8px; }
