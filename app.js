@@ -31,10 +31,15 @@
     const open = o.open && typeof o.open === 'object' ? o.open : {};
     if (open.doctors || open.formerdoctors) open.providers = true;
     if (open.medhistory) open.meds = true;
+    if (open.dxhistory) open.conditions = true;
+    const data = PHP.migrate(o.data);
+    let added = Array.isArray(o.added) ? o.added.slice() : [];
+    // "Vision, Hearing & Dental" became three sections: keep the ones that hold data
+    if (added.includes('senses')) added = added.concat(['vision', 'hearing', 'dental'].filter((id) => data[id] && !added.includes(id)));
     return {
-      v: 2,
-      data: PHP.migrate(o.data),
-      added: Array.isArray(o.added) ? o.added.filter((id) => (PHP.sectionById(id) || {}).optional) : [],
+      v: 3,
+      data,
+      added: added.filter((id) => (PHP.sectionById(id) || {}).optional),
       open,
     };
   }
@@ -172,6 +177,45 @@
       return wrap;
     }
     if (f.type === 'checklist') return checklist(f, obj, changed, wrap, id);
+    if (f.type === 'heading') {
+      wrap.className = 'f full heading';
+      wrap.append(h('h3', { text: f.label }));
+      return wrap;
+    }
+    if (f.type === 'height') {
+      const [ft0, in0] = String(obj[f.k] || '').split('-');
+      const part = (val, max, unit, aria) => {
+        const i = h('input', { type: 'text', inputmode: 'numeric', maxlength: String(max), 'aria-label': aria });
+        i.value = val || '';
+        i.addEventListener('input', () => {
+          i.value = i.value.replace(/\D/g, '');
+          const ft = feet.value;
+          const inch = inches.value;
+          set(ft || inch ? `${ft}-${inch}` : '');
+        });
+        return h('span', { class: 'unit-input' }, i, h('span', { class: 'unit', text: unit }));
+      };
+      const ftWrap = part(ft0, 1, 'ft', f.label + ', feet');
+      const inWrap = part(in0, 2, 'in', f.label + ', inches');
+      const feet = ftWrap.querySelector('input');
+      const inches = inWrap.querySelector('input');
+      wrap.setAttribute('role', 'group');
+      wrap.setAttribute('aria-labelledby', id + 'l');
+      wrap.append(h('span', { class: 'lbl', id: id + 'l', text: f.label }), h('div', { class: 'height' }, ftWrap, inWrap));
+      return wrap;
+    }
+    if (f.type === 'number') {
+      const input = h('input', { type: 'text', id, inputmode: 'decimal', placeholder: f.ph });
+      input.value = obj[f.k] || '';
+      input.addEventListener('input', () => {
+        const clean = input.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+        if (clean !== input.value) input.value = clean;
+        set(clean);
+      });
+      wrap.setVal = (v) => (input.value = v);
+      wrap.append(h('label', { for: id, text: f.label }), f.unit ? h('span', { class: 'unit-input' }, input, h('span', { class: 'unit', text: f.unit })) : input);
+      return wrap;
+    }
 
     wrap.append(h('label', { for: id, text: f.label }));
     let input;
@@ -459,15 +503,19 @@
       if (d.none) return block;
     }
 
+    if (L.choices) return choicesBlock(sec, L, block, arr);
+
     const addBtn = h('button', { type: 'button', class: 'btn add', text: '+ Add ' + L.itemLabel, onclick: () => addEntry(sec, L) });
     const group = (items) => h('div', { class: 'entries' }, items.map((e) => entryEl(sec, L, e)));
+    if (L.questionnaire) block.append(questionnaireEl(sec, L, arr));
 
     if (L.split) {
       // Being edited stays where it is until Done, so the card does not jump mid-edit
       const cur = arr.filter((e) => PHP.isCurrent(e) || editing.has(e.id));
       const old = PHP.splitEntries(L, arr).past.filter((e) => !editing.has(e.id));
+      if (L.questionnaire && (cur.length || old.length)) block.append(h('h3', { class: 'group-title', text: 'Your conditions' }));
       if (cur.length) block.append(group(cur));
-      else if (!old.length) block.append(h('p', { class: 'empty-note', text: 'None added yet.' }));
+      else if (!old.length && !L.questionnaire) block.append(h('p', { class: 'empty-note', text: 'None added yet.' }));
       block.append(addBtn);
       if (old.length) block.append(h('h3', { class: 'group-title', text: L.pastTitle }), group(old));
       return block;
@@ -477,6 +525,102 @@
     if (items.length) block.append(group(items));
     else if (!L.noneLabel) block.append(h('p', { class: 'empty-note', text: 'None added yet.' }));
     block.append(addBtn);
+    return block;
+  }
+
+  // Restores focus to a checklist box after its section re-renders
+  function focusChoice(secId, label) {
+    const el = [...document.querySelectorAll('#sec-' + secId + ' input[data-q]')].find((i) => i.dataset.q === label);
+    if (el) el.focus({ preventScroll: true });
+  }
+  const hasDetails = (e, skip) => Object.entries(e).some(([k, v]) => !skip.includes(k) && PHP.isFilled(v));
+
+  // Medical History: a checklist of common conditions. Checking one adds it to the list below.
+  function questionnaireEl(sec, L, arr) {
+    const grid = h('div', { class: 'checklist q-grid' });
+    for (const label of L.questionnaire.items) {
+      const cid = 'f' + ++seq;
+      const cb = h('input', { type: 'checkbox', id: cid, 'data-q': label });
+      const linked = () => arr.filter((e) => e.q === label);
+      cb.checked = linked().length > 0;
+      cb.addEventListener('change', () => {
+        let undoable = false;
+        if (cb.checked) arr.push({ id: uid(), q: label, name: label, current: true });
+        else {
+          undoable = linked().some((e) => hasDetails(e, ['id', 'q', 'name', 'current']) || e.current === false);
+          if (undoable) snapshot();
+          linked().forEach((e) => {
+            arr.splice(arr.indexOf(e), 1);
+            editing.delete(e.id);
+          });
+        }
+        save();
+        rerender(sec.id);
+        focusChoice(sec.id, label);
+        if (undoable) toast(label + ' removed.', true);
+      });
+      grid.append(h('label', { class: 'check', for: cid }, cb, label));
+    }
+    return h('div', { class: 'questionnaire' }, h('p', { class: 'q-prompt', text: L.questionnaire.prompt }), grid);
+  }
+
+  // Allergies: the whole section is a checklist. Checked items open their details; Other allows several.
+  function choicesBlock(sec, L, block, arr) {
+    const detail = L.fields.filter((f) => f.k !== 'name');
+    const list = h('div', { class: 'choices' });
+    for (const label of L.choices.concat('Other')) {
+      const isOther = label === 'Other';
+      const mine = arr.filter((e) => e.q === label);
+      const cid = 'f' + ++seq;
+      const cb = h('input', { type: 'checkbox', id: cid, 'data-q': label });
+      cb.checked = mine.length > 0;
+      const row = h('div', { class: 'choice' + (cb.checked ? ' checked' : '') }, h('label', { class: 'check', for: cid }, cb, label));
+      cb.addEventListener('change', () => {
+        let undoable = false;
+        if (cb.checked) arr.push({ id: uid(), q: label, name: isOther ? '' : label });
+        else {
+          undoable = mine.some((e) => hasDetails(e, isOther ? ['id', 'q'] : ['id', 'q', 'name']));
+          if (undoable) snapshot();
+          mine.forEach((e) => arr.splice(arr.indexOf(e), 1));
+        }
+        save();
+        rerender(sec.id);
+        if (cb.checked) {
+          const first = document.querySelector(`#sec-${sec.id} .choice.checked [data-entry="${arr[arr.length - 1].id}"] input, #sec-${sec.id} .choice.checked [data-entry="${arr[arr.length - 1].id}"] select`);
+          if (first) first.focus({ preventScroll: true });
+          else focusChoice(sec.id, label);
+        } else focusChoice(sec.id, label);
+        if (undoable) toast(label + ' removed.', true);
+      });
+      if (cb.checked) {
+        for (const e of mine) {
+          const det = h('div', { class: 'choice-detail', 'data-entry': e.id }, fieldGrid(isOther ? L.fields : detail, e, () => onChange(sec)));
+          if (isOther && mine.length > 1)
+            det.append(
+              h('div', { class: 'entry-actions' }, h('span', { class: 'spacer' }), h('button', { type: 'button', class: 'link danger', text: 'Remove', onclick: () => removeEntry(sec, L, e) }))
+            );
+          row.append(det);
+        }
+        if (isOther)
+          row.append(
+            h('button', {
+              type: 'button',
+              class: 'btn add',
+              text: '+ Add another allergy',
+              onclick: () => {
+                const e = { id: uid(), q: 'Other', name: '' };
+                arr.push(e);
+                save();
+                rerender(sec.id);
+                const inp = document.querySelector(`#sec-${sec.id} [data-entry="${e.id}"] input`);
+                if (inp) inp.focus();
+              },
+            })
+          );
+      }
+      list.append(row);
+    }
+    block.append(list);
     return block;
   }
 
@@ -510,31 +654,6 @@
     edit.append(fieldGrid(L.fields, e, () => onChange(sec), L.autofill));
     const actions = h('div', { class: 'entry-actions' }, h('button', { type: 'button', class: 'btn primary', text: 'Done', onclick: () => done(sec, L, e) }));
 
-    let panel = null;
-    const toggleMove = () => {
-      if (panel) {
-        panel.remove();
-        panel = null;
-        return;
-      }
-      const mv = { end: PHP.todayISO() };
-      panel = h(
-        'div',
-        { class: 'move-panel' },
-        h('p', { class: 'sub', text: 'Saves this to ' + L.historyName + ' as a permanent record.' }),
-        fieldGrid([{ k: 'end', label: L.endLabel, type: 'date', w: 'half' }], mv, () => {}),
-        h(
-          'div',
-          { class: 'entry-actions' },
-          h('button', { type: 'button', class: 'btn primary', text: 'Move', onclick: () => moveToHistory(sec, L, e, mv) }),
-          h('button', { type: 'button', class: 'link', text: 'Cancel', onclick: toggleMove })
-        )
-      );
-      edit.append(panel);
-      panel.querySelector('input').focus();
-    };
-
-    if (L.historyId) actions.append(h('button', { type: 'button', class: 'link', text: 'Move to ' + L.historyName, onclick: toggleMove }));
     actions.append(h('span', { class: 'spacer' }), h('button', { type: 'button', class: 'link danger', text: 'Remove', onclick: () => removeEntry(sec, L, e) }));
     edit.append(actions);
     el.append(edit);
@@ -543,7 +662,7 @@
 
   function focusFirst(entryId) {
     const ed = document.querySelector(`[data-entry="${entryId}"] .entry-edit`);
-    const f = ed && ed.querySelector('input, select, textarea');
+    const f = ed && ed.querySelector('input:not([type=checkbox]), select, textarea');
     if (f) {
       f.focus({ preventScroll: true });
       f.closest('.entry').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -590,22 +709,6 @@
     save();
     rerender(sec.id);
     toast('Removed.', true);
-  }
-
-  function moveToHistory(sec, L, e, mv) {
-    snapshot();
-    const entry = { id: uid() };
-    for (const [from, to] of Object.entries(L.toHistory)) if (PHP.isFilled(e[from])) entry[to] = e[from];
-    if (PHP.isFilled(mv.end)) entry[L.endField] = mv.end;
-    const arr = listArr(sec.id, L.key);
-    arr.splice(arr.indexOf(e), 1);
-    editing.delete(e.id);
-    const hs = PHP.sectionById(L.historyId);
-    listArr(hs.id, hs.list.key).push(entry);
-    save();
-    rerender(sec.id);
-    rerender(hs.id);
-    toast('Moved to ' + L.historyName + '.', true);
   }
 
   function addSection(sec) {

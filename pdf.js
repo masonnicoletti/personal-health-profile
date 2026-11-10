@@ -189,7 +189,7 @@
             listTable(L, past);
           }
         } else {
-          listTable(L, PHP.sortEntries(L, rows));
+          listTable(L, L.choices ? PHP.choiceOrder(L, rows) : PHP.sortEntries(L, rows));
         }
       }
       y += 18;

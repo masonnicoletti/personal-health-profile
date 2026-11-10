@@ -3,8 +3,8 @@
   const PHP = window.PHP;
   let n = 0;
   const L = (arr) => arr.map((e) => ({ id: 's' + ++n, ...e }));
-  const ALBEMARLE = '1450 Ivy Road, Suite 200\nCharlottesville, VA 22903';
-  const UVA = '1215 Lee Street\nCharlottesville, VA 22908';
+  const ALBEMARLE = { street: '1450 Ivy Road', unit: 'Suite 200', city: 'Charlottesville', state: 'VA', zip: '22903' };
+  const UVA = { street: '1215 Lee Street', city: 'Charlottesville', state: 'VA', zip: '22908' };
 
   PHP.sampleData = () => ({
     data: {
@@ -12,11 +12,15 @@
         values: {
           first: 'Margaret',
           last: 'Ellis',
+          preferred: 'Peggy',
           dob: '1949-04-17',
           sex: 'Female',
+          marital: 'Widowed',
+          height: '5-4',
+          weight: '148',
           blood: 'O+',
           phone: '(434) 555-0142',
-          lang: 'English',
+          donor: 'Yes',
           street: '212 Maple Row',
           city: 'Charlottesville',
           state: 'VA',
@@ -24,7 +28,36 @@
         },
       },
       lifestyle: {
-        values: { smoking: 'Former', quit: '1988', alcohol: 'Occasional', drinks: '1 to 2', exercise: 'Light', exerciseDesc: 'Walking 20 minutes most days', diet: 'Low sugar, low sodium', living: 'Live alone', help: 'Some', helpDesc: 'Grocery shopping, driving at night' },
+        values: {
+          smoking: 'Used to',
+          quit: '1988',
+          smokedYears: '15',
+          alcohol: 'Occasionally',
+          drinks: '2',
+          caffeine: '2',
+          drugs: 'No',
+          diet: 'Low sugar or diabetic',
+          activity: 'Lightly active',
+          activityType: 'Walking',
+          activityDays: '5',
+          activityMins: '20',
+          mobility: 'Cane',
+          falls: 'Yes',
+          fallCount: '1',
+          sleepHours: '6',
+          sleepQuality: 'Fairly well',
+          sleepTrouble: true,
+          sleepDesc: 'Wakes up at night with knee pain',
+          stress: 'Moderate',
+          stressDesc: 'Managing appointments alone',
+          work: 'Retired',
+          formerOccupation: 'Elementary school teacher',
+          living: 'Live alone',
+          caregiver: 'No',
+          help: 'Some',
+          helpDesc: 'Grocery shopping, driving at night',
+          driving: 'Daytime only',
+        },
       },
       family: {
         lists: {
@@ -34,36 +67,24 @@
           ]),
         },
       },
-      allergies: {
-        lists: {
-          main: L([
-            { name: 'Penicillin', reaction: 'Hives, swelling', severity: 'Severe' },
-            { name: 'Shellfish', reaction: 'Upset stomach', severity: 'Mild' },
-          ]),
-        },
-      },
       conditions: {
         lists: {
           main: L([
-            { name: 'High blood pressure', diagnosed: '2008--', by: 'Dr. Anita Patel' },
-            { name: 'Type 2 diabetes', diagnosed: '2015-06-', by: 'Dr. Linh Nguyen', notes: 'A1c checked every 3 months' },
-            { name: 'Osteoarthritis, both knees', diagnosed: '2019--', by: 'Dr. Anita Patel' },
+            { q: 'High blood pressure', name: 'High blood pressure', diagnosed: '2008--', current: true },
+            { q: 'Diabetes', name: 'Type 2 diabetes', diagnosed: '2015-06-', notes: 'A1c checked every 3 months', current: true },
+            { q: 'Arthritis', name: 'Osteoarthritis, both knees', diagnosed: '2019--', current: true },
+            { q: 'Cancer', name: 'Breast cancer, stage I', diagnosed: '2011-02-', resolved: '2012-01-', notes: 'Lumpectomy and radiation. In remission.', current: false },
           ]),
-        },
-      },
-      dxhistory: {
-        lists: {
-          main: L([{ name: 'Breast cancer, stage I', diagnosed: '2011-02-', resolved: '2012-01-', by: 'UVA Cancer Center', notes: 'Lumpectomy and radiation. In remission.' }]),
         },
       },
       meds: {
         lists: {
           main: L([
-            { name: 'Lisinopril', dose: '20 mg', freq: 'Once daily, morning', purpose: 'Blood pressure', prescriber: 'Dr. Anita Patel', start: '2008-09-', current: true },
-            { name: 'Metformin', dose: '500 mg', freq: 'Twice daily with meals', purpose: 'Diabetes', prescriber: 'Dr. Linh Nguyen', start: '2015-06-', current: true },
-            { name: 'Atorvastatin', dose: '10 mg', freq: 'Once daily, evening', purpose: 'Cholesterol', prescriber: 'Dr. Anita Patel', start: '2017-03-', current: true },
-            { name: 'Tamoxifen', dose: '20 mg', start: '2012-02-', end: '2017-02-', prescriber: 'Dr. Chidi Okafor', reason: 'Completed 5-year course', current: false },
-            { name: 'Amlodipine', dose: '5 mg', start: '2008-02-', end: '2008-09-', reason: 'Ankle swelling', current: false },
+            { current: true, name: 'Lisinopril', dose: '20 mg', freq: 'Once daily, morning', prescriber: 'Dr. Anita Patel', start: '2008-09-' },
+            { current: true, name: 'Metformin', dose: '500 mg', freq: 'Twice daily with meals', prescriber: 'Dr. Linh Nguyen', start: '2015-06-' },
+            { current: true, name: 'Atorvastatin', dose: '10 mg', freq: 'Once daily, evening', prescriber: 'Dr. Anita Patel', start: '2017-03-' },
+            { current: false, name: 'Tamoxifen', dose: '20 mg', start: '2012-02-', end: '2017-02-', prescriber: 'Dr. Chidi Okafor', reason: 'Completed 5-year course' },
+            { current: false, name: 'Amlodipine', dose: '5 mg', start: '2008-02-', end: '2008-09-', reason: 'Ankle swelling' },
           ]),
         },
       },
@@ -75,13 +96,32 @@
           ]),
         },
       },
+      immunizations: {
+        lists: {
+          main: L([
+            { name: 'Flu (influenza)', date: '2026-10-02' },
+            { name: 'COVID-19', date: '2026-10-02' },
+            { name: 'RSV', date: '2024-09-' },
+            { name: 'Pneumonia (PCV20)', date: '2023-11-' },
+            { name: 'Shingles (Shingrix)', date: '2022-05-', notes: 'Both doses' },
+          ]),
+        },
+      },
+      allergies: {
+        lists: {
+          main: L([
+            { q: 'Penicillin', name: 'Penicillin', severity: 'Severe', reaction: 'Hives or rash', notes: 'Also swelling of the lips' },
+            { q: 'Shellfish', name: 'Shellfish', severity: 'Mild', reaction: 'Nausea or vomiting' },
+          ]),
+        },
+      },
       providers: {
         lists: {
           main: L([
-            { name: 'Dr. Anita Patel', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', address: ALBEMARLE, start: '2006--', current: true },
-            { name: 'Sam Rivera, PA-C', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', address: ALBEMARLE, start: '2022--', current: true },
-            { name: 'Dr. Linh Nguyen', specialty: 'Endocrinology', office: 'UVA Endocrinology', phone: '(434) 555-0155', address: UVA, start: '2015--', current: true },
-            { name: 'Dr. Chidi Okafor', specialty: 'Oncology', office: 'UVA Cancer Center', phone: '(434) 555-0160', address: UVA, start: '2011--', end: '2017--', reason: 'Completed treatment', current: false },
+            { current: true, name: 'Dr. Anita Patel', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2006--' },
+            { current: true, name: 'Sam Rivera, PA-C', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2022--' },
+            { current: true, name: 'Dr. Linh Nguyen', specialty: 'Endocrinology', office: 'UVA Endocrinology', phone: '(434) 555-0155', ...UVA, start: '2015--' },
+            { current: false, name: 'Dr. Chidi Okafor', specialty: 'Oncology', office: 'UVA Cancer Center', phone: '(434) 555-0160', ...UVA, start: '2011--', end: '2017--', reason: 'Completed treatment' },
           ]),
         },
       },
@@ -93,13 +133,11 @@
           ]),
         },
       },
-      immunizations: {
+      emergency: {
         lists: {
           main: L([
-            { name: 'Flu', date: '2026-10-02', where: 'Main Street Pharmacy' },
-            { name: 'COVID-19 booster', date: '2026-10-02', where: 'Main Street Pharmacy' },
-            { name: 'Shingles (Shingrix), 2 doses', date: '2022-05-', where: 'Dr. Patel' },
-            { name: 'Pneumonia (PCV20)', date: '2023-11-' },
+            { first: 'Daniel', last: 'Ellis', rel: 'Son', phone: '(434) 555-0177', email: 'daniel.ellis@example.com', notes: 'Health care proxy. Call first.' },
+            { first: 'Ruth', last: 'Carter', rel: 'Neighbor', phone: '(434) 555-0123', notes: 'Has a spare key' },
           ]),
         },
       },
@@ -109,14 +147,6 @@
             { date: '2026-11-01', type: 'New symptom', text: 'Tingling in both feet at night, started about 3 weeks ago.' },
             { date: '2026-10-20', type: 'Question for next visit', text: 'Should I still take baby aspirin?' },
             { date: '2026-09-12', type: 'Doctor recommendation', text: 'Dr. Patel: check blood pressure at home twice a week and bring the log.', resolved: true },
-          ]),
-        },
-      },
-      emergency: {
-        lists: {
-          main: L([
-            { first: 'Daniel', last: 'Ellis', rel: 'Son', phone: '(434) 555-0177', email: 'daniel.ellis@example.com' },
-            { first: 'Ruth', last: 'Carter', rel: 'Neighbor', phone: '(434) 555-0123' },
           ]),
         },
       },
@@ -145,8 +175,9 @@
           ]),
         },
       },
+      vision: { values: { glasses: 'Glasses', rx: 'Reading +2.00', eyeExam: '2026-03-', eyeConditions: 'Early cataract, left eye' } },
     },
-    added: ['appointments'],
-    open: { basic: true, meds: true },
+    added: ['appointments', 'vision'],
+    open: { basic: true },
   });
 })();

@@ -16,9 +16,9 @@ Because of this:
 
 ## What it covers
 
-Basic information, lifestyle, family history, conditions, diagnosis history, medications (current and past), surgeries, immunizations, allergies, providers (current and past), insurance, emergency contacts, and a notes and questions log.
+Basic information, lifestyle, family history, medical history (current and past conditions), medications (current and past), surgeries, immunizations, allergies, providers (current and past), insurance, emergency contacts, and a notes and questions log.
 
-You can also add optional sections: an appointment log, supplements, hospital stays, tests and screenings, a vitals log, devices and implants, and vision, hearing and dental.
+You can also add optional sections: an appointment log, supplements, hospital stays, tests and screenings, a vitals log, devices and implants, vision, hearing, and dental. Notes and questions always stays last.
 
 No field is required. The PDF includes only what you have filled in.
 

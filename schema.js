@@ -4,9 +4,11 @@
  * Section kinds
  *   profile : one record of fields
  *   list    : repeating entries. L.kind = 'current' (updatable) or 'history' (permanent record)
- *             L.split = 'current' groups entries into Current and Past by that checkbox
- * Field: { k, label, type, w, opts, ph, showIf(values), suggest(), meta, defaultOn }
- *   type: text | long | date | phone | select | check | checklist
+ *     L.split         group entries into Current and Past by the "current" checkbox
+ *     L.questionnaire checklist shown above the entries; each checked item becomes an entry
+ *     L.choices       the whole section is a checklist of common choices, each with detail fields
+ * Field: { k, label, type, w, opts, ph, showIf(values), suggest(), meta, defaultOn, unit, pdfLabel }
+ *   type: text | long | date | phone | number | height | select | check | checklist | heading
  *   w:    full | half | third | twothird
  *   select options may be a function; any select that includes 'Other' gets a text box for it
  */
@@ -45,6 +47,11 @@
     if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
     return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
   };
+  // Height is stored as "feet-inches", either part may be blank
+  PHP.fmtHeight = function (v) {
+    const [ft, inch] = String(v || '').split('-');
+    return [ft && ft + ' ft', inch && inch + ' in'].filter(Boolean).join(' ');
+  };
 
   // Value of a select, with the typed text when "Other" was chosen
   PHP.ov = (obj, k) => (obj[k] === 'Other' && PHP.isFilled(obj[k + 'Other']) ? obj[k + 'Other'].trim() : obj[k] || '');
@@ -68,13 +75,90 @@
   PHP.officeNames = () => uniq(PHP.providers().map((p) => p.office));
   PHP.currentProviderNames = () => uniq(PHP.providers().filter(PHP.isCurrent).map((p) => p.name));
 
-  const YN = ['Yes', 'No'];
   const STATES = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'Other'];
   const SPECIALTIES = ['Primary care', 'Audiology', 'Cardiology', 'Dentistry', 'Dermatology', 'Endocrinology', 'Gastroenterology', 'Geriatrics', 'Nephrology', 'Neurology', 'Oncology', 'Ophthalmology', 'Optometry', 'Orthopedics', 'Physical therapy', 'Podiatry', 'Psychiatry', 'Counseling', 'Pulmonology', 'Rheumatology', 'Urology', 'Other'];
   const RELATIONS = ['Spouse', 'Partner', 'Son', 'Daughter', 'Parent', 'Sibling', 'Grandchild', 'Other relative', 'Friend', 'Neighbor', 'Caregiver', 'Other'];
-  const notStopped = (v) => v.current === false;
+  const VACCINES = [
+    'Flu (influenza)',
+    'COVID-19',
+    'Shingles (Shingrix)',
+    'Pneumonia (PCV20)',
+    'Pneumonia (PCV21)',
+    'Pneumonia (PCV15)',
+    'Pneumonia (PPSV23)',
+    'RSV',
+    'Tdap (tetanus, diphtheria, whooping cough)',
+    'Td (tetanus, diphtheria)',
+    'Hepatitis A',
+    'Hepatitis B',
+    'MMR (measles, mumps, rubella)',
+    'Chickenpox (varicella)',
+    'HPV',
+    'Meningitis',
+    'Polio',
+    'Other',
+  ];
+  const ALLERGIES = [
+    'Penicillin',
+    'Sulfa drugs',
+    'Aspirin or NSAIDs',
+    'Codeine or opioids',
+    'Latex',
+    'Iodine or contrast dye',
+    'Peanuts',
+    'Tree nuts',
+    'Shellfish',
+    'Fish',
+    'Eggs',
+    'Milk',
+    'Soy',
+    'Wheat or gluten',
+    'Bee or wasp stings',
+    'Pollen',
+    'Dust mites',
+    'Mold',
+    'Pet dander',
+  ];
+  const CONDITIONS = [
+    'High blood pressure',
+    'High cholesterol',
+    'Heart disease',
+    'Heart attack',
+    'Heart failure',
+    'Irregular heartbeat (AFib)',
+    'Stroke or mini-stroke (TIA)',
+    'Blood clots',
+    'Diabetes',
+    'Thyroid disease',
+    'Asthma',
+    'COPD or emphysema',
+    'Sleep apnea',
+    'Cancer',
+    'Kidney disease',
+    'Liver disease',
+    'Acid reflux (GERD)',
+    'Arthritis',
+    'Osteoporosis',
+    'Anemia',
+    'Glaucoma',
+    'Seizures',
+    'Memory loss or dementia',
+    'Depression',
+    'Anxiety',
+  ];
+
+  const notCurrent = (v) => v.current === false;
   const fullName = (t) => [t.first, t.last].filter(Boolean).join(' ');
   const range = (a, b) => [PHP.fmtDate(a), PHP.fmtDate(b)].filter(Boolean).join(' to ');
+  const oneLine = (t) => [[t.street, t.unit].filter(Boolean).join(', '), [[t.city, t.state].filter(Boolean).join(', '), t.zip].filter(Boolean).join(' ')].filter(Boolean);
+  const addressFields = () => [
+    { k: 'street', label: 'Street address', type: 'text', w: 'twothird' },
+    { k: 'unit', label: 'Suite or unit', type: 'text', w: 'third' },
+    { k: 'city', label: 'City', type: 'text', w: 'third' },
+    { k: 'state', label: 'State', type: 'select', opts: STATES, w: 'third' },
+    { k: 'zip', label: 'ZIP code', type: 'text', w: 'third', inputmode: 'numeric', maxlength: 10 },
+  ];
+  const ADDRESS_KEYS = ['street', 'unit', 'city', 'state', 'stateOther', 'zip'];
 
   const SECTIONS = [
     {
@@ -82,14 +166,18 @@
       title: 'Basic Information',
       kind: 'profile',
       fields: [
-        { k: 'first', label: 'First name', type: 'text', w: 'half' },
-        { k: 'last', label: 'Last name', type: 'text', w: 'half' },
+        { k: 'first', label: 'First name', type: 'text', w: 'third' },
+        { k: 'last', label: 'Last name', type: 'text', w: 'third' },
+        { k: 'preferred', label: 'Preferred name', type: 'text', w: 'third' },
         { k: 'dob', label: 'Date of birth', type: 'date', w: 'third' },
         { k: 'sex', label: 'Sex', type: 'select', opts: ['Female', 'Male', 'Other'], w: 'third' },
+        { k: 'marital', label: 'Marital status', type: 'select', opts: ['Single', 'Married', 'Partnered', 'Divorced', 'Separated', 'Widowed'], w: 'third' },
+        { k: 'height', label: 'Height', type: 'height', w: 'third' },
+        { k: 'weight', label: 'Weight', type: 'number', unit: 'lb', w: 'third' },
         { k: 'blood', label: 'Blood type', type: 'select', opts: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'], w: 'third' },
         { k: 'phone', label: 'Phone', type: 'phone', w: 'third' },
         { k: 'email', label: 'Email', type: 'text', w: 'third' },
-        { k: 'lang', label: 'Primary language', type: 'text', w: 'third' },
+        { k: 'donor', label: 'Organ donor', type: 'select', opts: ['Yes', 'No', 'Undecided'], w: 'third' },
         { k: 'street', label: 'Street address', type: 'text', w: 'twothird' },
         { k: 'unit', label: 'Apt or unit', type: 'text', w: 'third' },
         { k: 'city', label: 'City', type: 'text', w: 'third' },
@@ -98,12 +186,7 @@
       ],
       merge: [
         { label: 'Name', keys: ['first', 'last'], join: fullName },
-        {
-          label: 'Address',
-          keys: ['street', 'unit', 'city', 'state', 'zip'],
-          long: true,
-          join: (t) => [[t.street, t.unit].filter(Boolean).join(', '), [[t.city, t.state].filter(Boolean).join(', '), t.zip].filter(Boolean).join(' ')].filter(Boolean).join('\n'),
-        },
+        { label: 'Address', keys: ['street', 'unit', 'city', 'state', 'zip'], long: true, join: (t) => oneLine(t).join('\n') },
       ],
     },
 
@@ -112,23 +195,49 @@
       title: 'Lifestyle & Social',
       kind: 'profile',
       info: {
-        what: 'Everyday habits and living situation.',
-        why: 'Habits and support at home shape your health and care options.',
+        what: 'A few questions about daily habits, work and home life.',
+        why: 'Habits, sleep, stress and support at home all shape your health and care options.',
       },
       fields: [
-        { k: 'smoking', label: 'Tobacco', type: 'select', opts: ['Never', 'Former', 'Current'], w: 'half' },
-        { k: 'quit', label: 'Year quit', type: 'text', w: 'half', showIf: (v) => v.smoking === 'Former' },
-        { k: 'amount', label: 'Amount per day', type: 'text', w: 'half', showIf: (v) => v.smoking === 'Current' },
-        { k: 'alcohol', label: 'Alcohol', type: 'select', opts: ['None', 'Occasional', 'Weekly', 'Daily'], w: 'half' },
-        { k: 'drinks', label: 'Drinks per week', type: 'text', w: 'half', showIf: (v) => !!v.alcohol && v.alcohol !== 'None' },
-        { k: 'exercise', label: 'Exercise', type: 'select', opts: ['None', 'Light', 'Regular', 'Vigorous'], w: 'half' },
-        { k: 'exerciseDesc', label: 'What kind', type: 'text', w: 'half', showIf: (v) => !!v.exercise && v.exercise !== 'None' },
-        { k: 'diet', label: 'Diet', type: 'text', w: 'full', ph: 'e.g. low sodium' },
-        { k: 'living', label: 'Living situation', type: 'select', opts: ['Live alone', 'With spouse or partner', 'With family', 'Assisted living', 'Nursing home', 'Other'], w: 'half' },
-        { k: 'caregiver', label: 'Caregiver', type: 'text', w: 'half' },
-        { k: 'help', label: 'Needs help with daily tasks', type: 'select', opts: ['No', 'Some', 'Often'], w: 'half' },
-        { k: 'helpDesc', label: 'Which tasks', type: 'text', w: 'half', showIf: (v) => v.help === 'Some' || v.help === 'Often' },
-        { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
+        { type: 'heading', label: 'Habits' },
+        { k: 'smoking', label: 'Do you use tobacco?', pdfLabel: 'Tobacco', type: 'select', opts: ['Never', 'Used to', 'Yes'], w: 'half' },
+        { k: 'tobaccoType', label: 'What kind?', pdfLabel: 'Tobacco type', type: 'select', opts: ['Cigarettes', 'Cigars', 'Pipe', 'Chewing tobacco', 'Vaping', 'Other'], w: 'half', showIf: (v) => v.smoking === 'Yes' },
+        { k: 'amount', label: 'How much per day?', pdfLabel: 'Amount per day', type: 'text', w: 'half', showIf: (v) => v.smoking === 'Yes' },
+        { k: 'quit', label: 'Year you quit', pdfLabel: 'Year quit', type: 'number', w: 'half', showIf: (v) => v.smoking === 'Used to' },
+        { k: 'smokedYears', label: 'How many years did you use it?', pdfLabel: 'Years used', type: 'number', w: 'half', showIf: (v) => v.smoking === 'Used to' },
+        { k: 'alcohol', label: 'Do you drink alcohol?', pdfLabel: 'Alcohol', type: 'select', opts: ['No', 'Occasionally', 'Weekly', 'Daily'], w: 'half' },
+        { k: 'drinks', label: 'Drinks per week', type: 'number', w: 'half', showIf: (v) => !!v.alcohol && v.alcohol !== 'No' },
+        { k: 'caffeine', label: 'Cups of coffee, tea or soda per day', pdfLabel: 'Caffeine per day', type: 'number', w: 'half' },
+        { k: 'drugs', label: 'Do you use cannabis or other drugs?', pdfLabel: 'Cannabis or drugs', type: 'select', opts: ['No', 'Used to', 'Yes'], w: 'half' },
+        { k: 'drugsDesc', label: 'What and how often?', pdfLabel: 'Details', type: 'text', w: 'full', showIf: (v) => v.drugs === 'Yes' || v.drugs === 'Used to' },
+        { k: 'diet', label: 'Do you follow a special diet?', pdfLabel: 'Diet', type: 'select', opts: ['No', 'Low sodium', 'Low sugar or diabetic', 'Heart healthy', 'Low fat', 'Vegetarian', 'Vegan', 'Gluten free', 'Other'], w: 'half' },
+
+        { type: 'heading', label: 'Activity & sleep' },
+        { k: 'activity', label: 'How physically active are you?', pdfLabel: 'Physical activity', type: 'select', opts: ['Not active', 'Lightly active', 'Moderately active', 'Very active'], w: 'half' },
+        { k: 'activityType', label: 'What do you do?', pdfLabel: 'Activity type', type: 'text', ph: 'e.g. walking, swimming', w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
+        { k: 'activityDays', label: 'Days per week', type: 'select', opts: ['1', '2', '3', '4', '5', '6', '7'], w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
+        { k: 'activityMins', label: 'Minutes each time', type: 'number', w: 'half', showIf: (v) => !!v.activity && v.activity !== 'Not active' },
+        { k: 'mobility', label: 'Do you use a mobility aid?', pdfLabel: 'Mobility aid', type: 'select', opts: ['No', 'Cane', 'Walker', 'Wheelchair', 'Other'], w: 'half' },
+        { k: 'falls', label: 'Any falls in the past year?', pdfLabel: 'Falls in past year', type: 'select', opts: ['No', 'Yes'], w: 'half' },
+        { k: 'fallCount', label: 'How many?', pdfLabel: 'Number of falls', type: 'number', w: 'half', showIf: (v) => v.falls === 'Yes' },
+        { k: 'sleepHours', label: 'Hours of sleep per night', pdfLabel: 'Sleep per night', type: 'number', unit: 'hours', w: 'half' },
+        { k: 'sleepQuality', label: 'How well do you sleep?', pdfLabel: 'Sleep quality', type: 'select', opts: ['Well', 'Fairly well', 'Poorly'], w: 'half' },
+        { k: 'sleepTrouble', label: 'Trouble sleeping', type: 'check', w: 'full' },
+        { k: 'sleepDesc', label: 'What kind of trouble?', pdfLabel: 'Sleep trouble', type: 'text', ph: 'e.g. waking at night, snoring', w: 'full', showIf: (v) => v.sleepTrouble === true },
+        { k: 'stress', label: 'How would you rate your stress?', pdfLabel: 'Stress', type: 'select', opts: ['Low', 'Moderate', 'High'], w: 'half' },
+        { k: 'stressDesc', label: 'Main sources of stress', type: 'text', w: 'half', showIf: (v) => v.stress === 'Moderate' || v.stress === 'High' },
+
+        { type: 'heading', label: 'Work & home' },
+        { k: 'work', label: 'Work status', type: 'select', opts: ['Working full time', 'Working part time', 'Retired', 'Not working', 'Disabled', 'Student', 'Homemaker', 'Other'], w: 'half' },
+        { k: 'occupation', label: 'Occupation', type: 'text', w: 'half', showIf: (v) => /^Working|^Student/.test(v.work || '') },
+        { k: 'formerOccupation', label: 'Former occupation', type: 'text', w: 'half', showIf: (v) => /^(Retired|Not working|Disabled)$/.test(v.work || '') },
+        { k: 'living', label: 'Who do you live with?', pdfLabel: 'Living situation', type: 'select', opts: ['Live alone', 'Spouse or partner', 'Family', 'Assisted living', 'Nursing home', 'Other'], w: 'half' },
+        { k: 'caregiver', label: 'Do you have a caregiver?', pdfLabel: 'Caregiver', type: 'select', opts: ['No', 'Yes'], w: 'half' },
+        { k: 'caregiverName', label: 'Caregiver name and phone', pdfLabel: 'Caregiver details', type: 'text', w: 'half', showIf: (v) => v.caregiver === 'Yes' },
+        { k: 'help', label: 'Do you need help with daily tasks?', pdfLabel: 'Help with daily tasks', type: 'select', opts: ['No', 'Some', 'Often'], w: 'half' },
+        { k: 'helpDesc', label: 'Which tasks?', pdfLabel: 'Tasks', type: 'text', ph: 'e.g. bathing, shopping, driving', w: 'half', showIf: (v) => v.help === 'Some' || v.help === 'Often' },
+        { k: 'driving', label: 'Do you drive?', pdfLabel: 'Driving', type: 'select', opts: ['Yes', 'Daytime only', 'No'], w: 'half' },
+        { k: 'notes', label: 'Anything else', pdfLabel: 'Notes', type: 'long', w: 'full' },
       ],
     },
 
@@ -147,7 +256,7 @@
         fields: [
           { k: 'rel', label: 'Relative', type: 'text', w: 'half', ph: 'e.g. Mother' },
           { k: 'name', label: 'Condition', type: 'text', w: 'half' },
-          { k: 'age', label: 'Age at diagnosis', type: 'text', w: 'half' },
+          { k: 'age', label: 'Age at diagnosis', type: 'number', w: 'half' },
           { k: 'status', label: 'Status', type: 'select', opts: ['Living', 'Deceased'], w: 'half' },
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
@@ -157,79 +266,30 @@
     },
 
     {
-      id: 'allergies',
-      title: 'Allergies',
-      kind: 'list',
-      info: {
-        what: 'Anything that causes you a reaction: medicines, foods, latex, insect stings.',
-        why: 'Helps every provider avoid treatments that could harm you.',
-      },
-      list: {
-        key: 'main',
-        kind: 'current',
-        itemLabel: 'allergy',
-        noneLabel: 'No known allergies',
-        fields: [
-          { k: 'name', label: 'Allergic to', type: 'text', w: 'half' },
-          { k: 'reaction', label: 'Reaction', type: 'text', w: 'half' },
-          { k: 'severity', label: 'Severity', type: 'select', opts: ['Mild', 'Moderate', 'Severe'], w: 'half' },
-          { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
-        ],
-        title_: (e) => e.name,
-        sub: (e) => [e.reaction, e.severity].filter(Boolean).join(' · '),
-      },
-    },
-
-    {
       id: 'conditions',
-      title: 'Current Conditions',
+      title: 'Medical History',
       kind: 'list',
       info: {
-        what: 'Health conditions you have now or are managing.',
-        why: 'Gives a quick picture of your health. When a condition resolves, move it to Diagnosis History.',
+        what: 'Health conditions you have now or have had in the past.',
+        why: 'Start with the checklist, then add details or anything not listed. Uncheck "Current condition" once something has resolved.',
       },
       list: {
         key: 'main',
         kind: 'current',
         itemLabel: 'condition',
-        historyId: 'dxhistory',
-        historyName: 'Diagnosis History',
-        toHistory: { name: 'name', diagnosed: 'diagnosed', by: 'by', notes: 'notes' },
-        endField: 'resolved',
-        endLabel: 'Resolved',
+        split: 'current',
+        pastTitle: 'Past conditions',
+        pastSortBy: 'resolved',
+        questionnaire: { prompt: 'Have you ever been diagnosed with any of these?', items: CONDITIONS },
         fields: [
+          { k: 'current', label: 'Current condition', type: 'check', w: 'full', meta: true, defaultOn: true },
           { k: 'name', label: 'Condition', type: 'text', w: 'full' },
           { k: 'diagnosed', label: 'Date diagnosed', type: 'date', w: 'half' },
-          { k: 'by', label: 'Managed by', type: 'text', w: 'half', suggest: () => PHP.currentProviderNames() },
+          { k: 'resolved', label: 'Date resolved', type: 'date', w: 'half', showIf: notCurrent },
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
         title_: (e) => e.name,
-        sub: (e) => [e.diagnosed && 'Since ' + PHP.fmtDate(e.diagnosed), e.by].filter(Boolean).join(' · '),
-      },
-    },
-
-    {
-      id: 'dxhistory',
-      title: 'Diagnosis History',
-      kind: 'list',
-      info: {
-        what: 'Past conditions, resolved or no longer active.',
-        why: 'Past diagnoses still matter to future care.',
-      },
-      list: {
-        key: 'main',
-        kind: 'history',
-        itemLabel: 'diagnosis',
-        sortBy: 'diagnosed',
-        fields: [
-          { k: 'name', label: 'Condition', type: 'text', w: 'full' },
-          { k: 'diagnosed', label: 'Diagnosed', type: 'date', w: 'half' },
-          { k: 'resolved', label: 'Resolved', type: 'date', w: 'half' },
-          { k: 'by', label: 'Treated by', type: 'text', w: 'full' },
-          { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
-        ],
-        title_: (e) => e.name,
-        sub: (e) => range(e.diagnosed, e.resolved),
+        sub: (e) => (PHP.isCurrent(e) ? (e.diagnosed ? 'Since ' + PHP.fmtDate(e.diagnosed) : '') : range(e.diagnosed, e.resolved)),
       },
     },
 
@@ -249,20 +309,18 @@
         pastTitle: 'Past medications',
         pastSortBy: 'end',
         fields: [
+          { k: 'current', label: 'Currently taking', type: 'check', w: 'full', meta: true, defaultOn: true },
           { k: 'name', label: 'Medication', type: 'text', w: 'half' },
           { k: 'dose', label: 'Dose', type: 'text', w: 'half', ph: 'e.g. 10 mg' },
           { k: 'freq', label: 'How often', type: 'text', w: 'half', ph: 'e.g. twice daily' },
-          { k: 'purpose', label: 'For', type: 'text', w: 'half' },
           { k: 'prescriber', label: 'Prescribed by', type: 'text', w: 'half', suggest: () => PHP.currentProviderNames() },
           { k: 'start', label: 'Started', type: 'date', w: 'half' },
-          { k: 'current', label: 'Currently taking', type: 'check', w: 'full', meta: true, defaultOn: true },
-          { k: 'end', label: 'Stopped', type: 'date', w: 'half', showIf: notStopped },
-          { k: 'reason', label: 'Reason stopped', type: 'text', w: 'half', showIf: notStopped },
+          { k: 'end', label: 'Stopped', type: 'date', w: 'half', showIf: notCurrent },
+          { k: 'reason', label: 'Reason stopped', type: 'text', w: 'full', showIf: notCurrent },
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
         title_: (e) => e.name,
-        sub: (e) =>
-          PHP.isCurrent(e) ? [e.dose, e.freq, e.purpose].filter(Boolean).join(' · ') : [e.dose, range(e.start, e.end), e.reason].filter(Boolean).join(' · '),
+        sub: (e) => (PHP.isCurrent(e) ? [e.dose, e.freq].filter(Boolean).join(' · ') : [e.dose, range(e.start, e.end), e.reason].filter(Boolean).join(' · ')),
       },
     },
 
@@ -291,6 +349,54 @@
     },
 
     {
+      id: 'immunizations',
+      title: 'Immunizations',
+      kind: 'list',
+      info: {
+        what: 'Vaccines you have received, with dates.',
+        why: 'Shows what is up to date and what may be due.',
+      },
+      list: {
+        key: 'main',
+        kind: 'history',
+        itemLabel: 'vaccine',
+        sortBy: 'date',
+        fields: [
+          { k: 'name', label: 'Vaccine', type: 'select', opts: VACCINES, w: 'half' },
+          { k: 'date', label: 'Date', type: 'date', w: 'half' },
+          { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
+        ],
+        title_: (e) => PHP.ov(e, 'name'),
+        sub: (e) => PHP.fmtDate(e.date),
+      },
+    },
+
+    {
+      id: 'allergies',
+      title: 'Allergies',
+      kind: 'list',
+      info: {
+        what: 'Check anything that causes you a reaction, then add details.',
+        why: 'Helps every provider avoid treatments that could harm you.',
+      },
+      list: {
+        key: 'main',
+        kind: 'current',
+        itemLabel: 'allergy',
+        noneLabel: 'No known allergies',
+        choices: ALLERGIES,
+        fields: [
+          { k: 'name', label: 'Allergic to', type: 'text', w: 'full' },
+          { k: 'severity', label: 'Severity', type: 'select', opts: ['Mild', 'Moderate', 'Severe'], w: 'half' },
+          { k: 'reaction', label: 'Reaction', type: 'select', opts: ['Hives or rash', 'Itching', 'Swelling', 'Trouble breathing', 'Anaphylaxis', 'Nausea or vomiting', 'Diarrhea', 'Dizziness', 'Other'], w: 'half' },
+          { k: 'notes', label: 'Notes', type: 'text', w: 'full' },
+        ],
+        title_: (e) => e.name,
+        sub: (e) => [PHP.ov(e, 'reaction'), e.severity].filter(Boolean).join(' · '),
+      },
+    },
+
+    {
       id: 'providers',
       title: 'Providers',
       kind: 'list',
@@ -306,18 +412,18 @@
         pastTitle: 'Past providers',
         pastSortBy: 'end',
         fields: [
+          { k: 'current', label: 'Currently seeing', type: 'check', w: 'full', meta: true, defaultOn: true },
           { k: 'name', label: 'Name', type: 'text', w: 'half' },
           { k: 'specialty', label: 'Specialty', type: 'select', opts: SPECIALTIES, w: 'half' },
           { k: 'office', label: 'Office', type: 'text', w: 'half', suggest: () => PHP.officeNames() },
           { k: 'phone', label: 'Phone', type: 'phone', w: 'half' },
-          { k: 'address', label: 'Address', type: 'long', w: 'full' },
+          ...addressFields(),
           { k: 'start', label: 'Started seeing', type: 'date', w: 'half' },
-          { k: 'current', label: 'Currently seeing', type: 'check', w: 'half', meta: true, defaultOn: true },
-          { k: 'end', label: 'Stopped seeing', type: 'date', w: 'half', showIf: notStopped },
-          { k: 'reason', label: 'Reason for leaving', type: 'text', w: 'half', showIf: notStopped },
+          { k: 'end', label: 'Stopped seeing', type: 'date', w: 'half', showIf: notCurrent },
+          { k: 'reason', label: 'Reason for leaving', type: 'text', w: 'full', showIf: notCurrent },
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
-        merge: [{ label: 'Office', keys: ['office', 'address'], join: (t) => [t.office, t.address.replace(/\s*\n\s*/g, ', ')].filter(Boolean).join('\n') }],
+        merge: [{ label: 'Office', keys: ['office', 'street', 'unit', 'city', 'state', 'zip'], join: (t) => [t.office, oneLine(t).join(', ')].filter(Boolean).join('\n') }],
         // Typing an office that is already listed fills in its address and phone
         autofill: (e, k) => {
           if (k !== 'office' || !PHP.isFilled(e.office)) return null;
@@ -326,7 +432,7 @@
           if (!m) return null;
           const out = {};
           if (e.office !== m.office) out.office = m.office; // match the existing spelling
-          if (!PHP.isFilled(e.address) && PHP.isFilled(m.address)) out.address = m.address;
+          if (!ADDRESS_KEYS.some((a) => PHP.isFilled(e[a]))) ADDRESS_KEYS.forEach((a) => PHP.isFilled(m[a]) && (out[a] = m[a]));
           if (!PHP.isFilled(e.phone) && PHP.isFilled(m.phone)) out.phone = m.phone;
           return out;
         },
@@ -362,26 +468,28 @@
     },
 
     {
-      id: 'immunizations',
-      title: 'Immunizations',
+      id: 'emergency',
+      title: 'Emergency Contacts',
       kind: 'list',
       info: {
-        what: 'Vaccines you have received, with dates.',
-        why: 'Shows what is up to date and what may be due.',
+        what: 'People to call if something happens to you.',
+        why: 'Hospitals and clinics ask for this at every visit.',
       },
       list: {
         key: 'main',
-        kind: 'history',
-        itemLabel: 'vaccine',
-        sortBy: 'date',
+        kind: 'current',
+        itemLabel: 'contact',
         fields: [
-          { k: 'name', label: 'Vaccine', type: 'text', w: 'half', ph: 'e.g. Flu, Shingles' },
-          { k: 'date', label: 'Date', type: 'date', w: 'half' },
-          { k: 'where', label: 'Given at', type: 'text', w: 'full' },
+          { k: 'first', label: 'First name', type: 'text', w: 'half' },
+          { k: 'last', label: 'Last name', type: 'text', w: 'half' },
+          { k: 'rel', label: 'Relationship', type: 'select', opts: RELATIONS, w: 'half' },
+          { k: 'phone', label: 'Phone', type: 'phone', w: 'half' },
+          { k: 'email', label: 'Email', type: 'text', w: 'full' },
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
-        title_: (e) => e.name,
-        sub: (e) => [PHP.fmtDate(e.date), e.where].filter(Boolean).join(' · '),
+        merge: [{ label: 'Name', keys: ['first', 'last'], join: fullName }],
+        title_: (e) => fullName(e),
+        sub: (e) => [PHP.ov(e, 'rel'), e.phone].filter(Boolean).join(' · '),
       },
     },
 
@@ -406,31 +514,6 @@
         ],
         title_: (e) => (e.text || '').split('\n')[0].slice(0, 70),
         sub: (e) => [PHP.fmtDate(e.date), PHP.ov(e, 'type'), e.resolved && 'Resolved'].filter(Boolean).join(' · '),
-      },
-    },
-
-    {
-      id: 'emergency',
-      title: 'Emergency Contacts',
-      kind: 'list',
-      info: {
-        what: 'People to call if something happens to you.',
-        why: 'Hospitals and clinics ask for this at every visit.',
-      },
-      list: {
-        key: 'main',
-        kind: 'current',
-        itemLabel: 'contact',
-        fields: [
-          { k: 'first', label: 'First name', type: 'text', w: 'half' },
-          { k: 'last', label: 'Last name', type: 'text', w: 'half' },
-          { k: 'rel', label: 'Relationship', type: 'select', opts: RELATIONS, w: 'half' },
-          { k: 'phone', label: 'Phone', type: 'phone', w: 'half' },
-          { k: 'email', label: 'Email', type: 'text', w: 'full' },
-        ],
-        merge: [{ label: 'Name', keys: ['first', 'last'], join: fullName }],
-        title_: (e) => fullName(e),
-        sub: (e) => [PHP.ov(e, 'rel'), e.phone].filter(Boolean).join(' · '),
       },
     },
 
@@ -559,13 +642,13 @@
         fields: [
           { k: 'date', label: 'Date', type: 'date', w: 'half' },
           { k: 'bp', label: 'Blood pressure', type: 'text', w: 'half', ph: '120/80' },
-          { k: 'pulse', label: 'Pulse', type: 'text', w: 'third' },
-          { k: 'weight', label: 'Weight', type: 'text', w: 'third' },
-          { k: 'glucose', label: 'Glucose', type: 'text', w: 'third' },
+          { k: 'pulse', label: 'Pulse', type: 'number', w: 'third' },
+          { k: 'weight', label: 'Weight', type: 'number', unit: 'lb', w: 'third' },
+          { k: 'glucose', label: 'Glucose', type: 'number', w: 'third' },
           { k: 'notes', label: 'Notes', type: 'text', w: 'full' },
         ],
         title_: (e) => [e.bp && 'BP ' + e.bp, e.pulse && 'Pulse ' + e.pulse].filter(Boolean).join(' · ') || PHP.fmtDate(e.date),
-        sub: (e) => [PHP.fmtDate(e.date), e.weight, e.glucose && 'Glucose ' + e.glucose].filter(Boolean).join(' · '),
+        sub: (e) => [PHP.fmtDate(e.date), e.weight && e.weight + ' lb', e.glucose && 'Glucose ' + e.glucose].filter(Boolean).join(' · '),
       },
     },
     {
@@ -589,29 +672,56 @@
       },
     },
     {
-      id: 'senses',
-      title: 'Vision, Hearing & Dental',
+      id: 'vision',
+      title: 'Vision',
       optional: true,
-      blurb: 'Glasses, hearing aids, dental visits',
+      blurb: 'Glasses, eye exams, eye conditions',
       kind: 'profile',
-      info: { what: 'Eye, ear and dental care details.', why: 'These checkups are easy to lose track of.' },
+      info: { what: 'Glasses, eye exams and eye conditions.', why: 'Eye checkups are easy to lose track of, and some conditions affect other treatment.' },
       fields: [
-        { k: 'glasses', label: 'Glasses or contacts', type: 'select', opts: YN, w: 'half' },
-        { k: 'rx', label: 'Prescription', type: 'text', w: 'half', showIf: (v) => v.glasses === 'Yes' },
+        { k: 'glasses', label: 'Glasses or contacts', type: 'select', opts: ['No', 'Glasses', 'Contacts', 'Both'], w: 'half' },
+        { k: 'rx', label: 'Prescription', type: 'text', w: 'half', showIf: (v) => !!v.glasses && v.glasses !== 'No' },
         { k: 'eyeExam', label: 'Last eye exam', type: 'date', w: 'half' },
-        { k: 'hearing', label: 'Hearing aids', type: 'select', opts: YN, w: 'half' },
+        { k: 'eyeDoctor', label: 'Eye doctor', type: 'text', w: 'half', suggest: () => PHP.currentProviderNames() },
+        { k: 'eyeConditions', label: 'Eye conditions', type: 'text', ph: 'e.g. cataracts, glaucoma', w: 'full' },
+        { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
+      ],
+    },
+    {
+      id: 'hearing',
+      title: 'Hearing',
+      optional: true,
+      blurb: 'Hearing loss, hearing aids, tests',
+      kind: 'profile',
+      info: { what: 'Hearing changes, hearing aids and hearing tests.', why: 'Lets providers know how best to communicate with you.' },
+      fields: [
+        { k: 'loss', label: 'Hearing loss', type: 'select', opts: ['None', 'Mild', 'Moderate', 'Severe'], w: 'half' },
+        { k: 'aids', label: 'Hearing aids', type: 'select', opts: ['No', 'Left ear', 'Right ear', 'Both ears'], w: 'half' },
         { k: 'hearingExam', label: 'Last hearing test', type: 'date', w: 'half' },
+        { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
+      ],
+    },
+    {
+      id: 'dental',
+      title: 'Dental',
+      optional: true,
+      blurb: 'Dental visits, dentures, implants',
+      kind: 'profile',
+      info: { what: 'Dental visits, dentures and implants.', why: 'Dental health affects nutrition and some procedures.' },
+      fields: [
         { k: 'dental', label: 'Last dental visit', type: 'date', w: 'half' },
-        { k: 'dentures', label: 'Dentures or implants', type: 'select', opts: YN, w: 'half' },
+        { k: 'dentist', label: 'Dentist', type: 'text', w: 'half', suggest: () => PHP.currentProviderNames() },
+        { k: 'dentures', label: 'Dentures or implants', type: 'select', opts: ['None', 'Partial dentures', 'Full dentures', 'Implants'], w: 'half' },
         { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
       ],
     },
   ];
 
-  // Display order of the core sections; optional sections follow in the order defined above
-  const ORDER = ['basic', 'lifestyle', 'family', 'conditions', 'dxhistory', 'meds', 'surgeries', 'immunizations', 'allergies', 'providers', 'insurance', 'emergency', 'notes'];
+  // Display order: core sections, then any optional sections the person added, with Notes & Questions always last
+  const ORDER = ['basic', 'lifestyle', 'family', 'conditions', 'meds', 'surgeries', 'immunizations', 'allergies', 'providers', 'insurance', 'emergency'];
+  const LAST = 'notes';
   const defined = new Map(SECTIONS.map((s, i) => [s.id, i]));
-  const rank = (s) => (ORDER.includes(s.id) ? ORDER.indexOf(s.id) : ORDER.length + defined.get(s.id));
+  const rank = (s) => (s.id === LAST ? 1e6 : ORDER.includes(s.id) ? ORDER.indexOf(s.id) : ORDER.length + defined.get(s.id));
   SECTIONS.sort((a, b) => rank(a) - rank(b));
 
   PHP.SECTIONS = SECTIONS;
@@ -628,18 +738,25 @@
   PHP.isFilled = (v) => v === true || (typeof v === 'string' && v.replace(/-/g, '').trim() !== '');
   PHP.visibleFields = (fields, obj) => fields.filter((f) => !f.showIf || f.showIf(obj || {}));
 
-  PHP.fieldFilled = (f, obj) => (f.type === 'checklist' ? f.items.some((i) => obj[i.k] === true) : PHP.isFilled(obj[f.k]));
+  PHP.fieldFilled = (f, obj) => {
+    if (f.type === 'heading') return false;
+    if (f.type === 'checklist') return f.items.some((i) => obj[i.k] === true);
+    return PHP.isFilled(obj[f.k]);
+  };
   PHP.fieldText = (f, obj) => {
     const v = obj[f.k];
+    if (f.type === 'heading') return '';
     if (f.type === 'checklist')
       return f.items
         .filter((i) => obj[i.k] === true)
         .map((i) => (PHP.isFilled(obj[i.k + 'Note']) ? `${i.label}: ${obj[i.k + 'Note'].trim()}` : i.label))
         .join('\n');
     if (f.type === 'date') return PHP.fmtDate(v);
+    if (f.type === 'height') return PHP.fmtHeight(v);
     if (f.type === 'check') return v ? 'Yes' : '';
     if (f.type === 'select') return PHP.ov(obj, f.k);
-    return String(v == null ? '' : v).trim();
+    const s = String(v == null ? '' : v).trim();
+    return f.unit && s ? `${s} ${f.unit}` : s;
   };
   PHP.entryHasData = (L, e) => PHP.visibleFields(L.fields, e).some((f) => !f.meta && PHP.fieldFilled(f, e));
   PHP.sectionHasData = (sec, d) => {
@@ -655,7 +772,7 @@
     const cols = [];
     const merged = new Set();
     for (const f of fields) {
-      if (f.meta || merged.has(f.k)) continue;
+      if (f.meta || f.type === 'heading' || merged.has(f.k)) continue;
       const m = (merge || []).find((g) => g.keys.includes(f.k));
       if (m) {
         m.keys.forEach((k) => merged.add(k));
@@ -668,7 +785,14 @@
         cols.push({ label: m.label, long: !!m.long, type: 'text', text, filled: (o) => text(o) !== '' });
       } else {
         const vis = (o) => !f.showIf || f.showIf(o);
-        cols.push({ label: f.label, k: f.k, long: f.type === 'long' || f.type === 'checklist', type: f.type, text: (o) => (vis(o) ? PHP.fieldText(f, o) : ''), filled: (o) => vis(o) && PHP.fieldFilled(f, o) });
+        cols.push({
+          label: f.pdfLabel || f.label,
+          k: f.k,
+          long: f.type === 'long' || f.type === 'checklist',
+          type: f.type,
+          text: (o) => (vis(o) ? PHP.fieldText(f, o) : ''),
+          filled: (o) => vis(o) && PHP.fieldFilled(f, o),
+        });
       }
     }
     return cols;
@@ -687,8 +811,27 @@
     current: arr.filter(PHP.isCurrent),
     past: PHP.sortByDate(arr.filter((e) => !PHP.isCurrent(e)), L.pastSortBy || 'end'),
   });
+  // Allergies: list order follows the checklist, then anything typed in under Other
+  PHP.choiceOrder = (L, arr) => {
+    const pos = (e) => (L.choices.includes(e.q) ? L.choices.indexOf(e.q) : L.choices.length);
+    return arr.slice().sort((a, b) => pos(a) - pos(b));
+  };
 
   /* ---------- Upgrade data saved by earlier versions ---------- */
+  const parseAddress = (text) => {
+    const lines = String(text || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    if (!lines.length) return {};
+    const m = lines.length > 1 && lines[lines.length - 1].match(/^(.*?),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+    if (!m) return { street: lines.join(', ') };
+    const st = m[2].toUpperCase();
+    return Object.assign({ street: lines.slice(0, -1).join(', '), city: m[1], zip: m[3] }, STATES.includes(st) ? { state: st } : { state: 'Other', stateOther: m[2] });
+  };
+  const addNote = (e, text) => {
+    if (!PHP.isFilled(text)) return;
+    e.notes = [e.notes, text].filter((s) => PHP.isFilled(s)).join('\n');
+  };
+  const matchLabel = (name, labels) => labels.find((l) => l.toLowerCase() === String(name || '').trim().toLowerCase());
+
   PHP.migrate = (data) => {
     const d = data || {};
     const list = (id) => {
@@ -700,19 +843,14 @@
       const p = String(n || '').trim().split(/\s+/).filter(Boolean);
       return { first: p.length > 1 ? p.slice(0, -1).join(' ') : p[0] || '', last: p.length > 1 ? p[p.length - 1] : '' };
     };
+
+    // Basic information
     const b = d.basic;
     if (b && b.values) {
       const v = b.values;
       if (v.name && !v.first && !v.last) Object.assign(v, splitName(v.name));
       delete v.name;
-      if (v.address && !v.street) {
-        const lines = v.address.split('\n').map((s) => s.trim()).filter(Boolean);
-        const m = lines.length > 1 && lines[lines.length - 1].match(/^(.*?),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
-        if (m) {
-          const st = m[2].toUpperCase();
-          Object.assign(v, { street: lines.slice(0, -1).join(', '), city: m[1], zip: m[3] }, STATES.includes(st) ? { state: st } : { state: 'Other', stateOther: m[2] });
-        } else v.street = lines.join(', ');
-      }
+      if (v.address && !v.street) Object.assign(v, parseAddress(v.address));
       if (v.phone) v.phone = PHP.fmtPhone(v.phone);
       ['address', 'pharmacy', 'directive', 'directiveLoc', 'proxy', 'proxyPhone'].forEach((k) => delete v[k]);
       if (b.lists && b.lists.emergency) {
@@ -724,11 +862,19 @@
         delete b.lists.emergency;
       }
     }
+
+    // Medications: history merged in, "For" moved to notes
     if (d.medhistory) {
       const meds = list('meds');
       ((d.medhistory.lists || {}).main || []).forEach((e) => meds.push({ ...e, current: false }));
       delete d.medhistory;
     }
+    ((d.meds && d.meds.lists && d.meds.lists.main) || []).forEach((e) => {
+      if (PHP.isFilled(e.purpose)) addNote(e, 'For: ' + e.purpose);
+      delete e.purpose;
+    });
+
+    // Providers: doctors merged in, address split into parts
     if (d.doctors || d.formerdoctors) {
       const pv = list('providers');
       ((d.doctors && d.doctors.lists.main) || []).forEach((e) => pv.push({ id: e.id, name: e.name, specialty: 'Other', specialtyOther: e.specialty, office: e.practice, phone: e.phone, start: e.since, notes: e.notes, current: true }));
@@ -742,6 +888,82 @@
       });
       delete d.doctors;
       delete d.formerdoctors;
+    }
+    ((d.providers && d.providers.lists && d.providers.lists.main) || []).forEach((p) => {
+      if (typeof p.address === 'string') {
+        if (!ADDRESS_KEYS.some((a) => PHP.isFilled(p[a]))) Object.assign(p, parseAddress(p.address));
+        delete p.address;
+      }
+    });
+
+    // Conditions and diagnosis history become one Medical History list
+    if (d.dxhistory) {
+      const cs = list('conditions');
+      ((d.dxhistory.lists || {}).main || []).forEach((e) => cs.push({ ...e, current: false }));
+      delete d.dxhistory;
+    }
+    ((d.conditions && d.conditions.lists && d.conditions.lists.main) || []).forEach((e) => {
+      if (PHP.isFilled(e.by)) addNote(e, 'Managed by: ' + e.by);
+      delete e.by;
+      if (!e.q) {
+        const hit = matchLabel(e.name, CONDITIONS);
+        if (hit) e.q = hit;
+      }
+    });
+
+    // Allergies: link to the checklist, anything else goes under Other
+    ((d.allergies && d.allergies.lists && d.allergies.lists.main) || []).forEach((e) => {
+      if (e.q) return;
+      const hit = matchLabel(e.name, ALLERGIES);
+      e.q = hit || 'Other';
+      if (hit) e.name = hit;
+      // "Hives" matches "Hives or rash", "Vomiting" matches "Nausea or vomiting"
+      const typed = String(e.reaction || '').trim().toLowerCase();
+      const r = ['Hives or rash', 'Itching', 'Swelling', 'Trouble breathing', 'Anaphylaxis', 'Nausea or vomiting', 'Diarrhea', 'Dizziness'].find(
+        (l) => l.toLowerCase() === typed || l.toLowerCase().split(' or ').includes(typed)
+      );
+      if (PHP.isFilled(e.reaction) && !r && e.reaction !== 'Other') (e.reactionOther = e.reaction), (e.reaction = 'Other');
+      else if (r) e.reaction = r;
+    });
+
+    // Immunizations: vaccine picked from a list, "Given at" moved to notes
+    ((d.immunizations && d.immunizations.lists && d.immunizations.lists.main) || []).forEach((e) => {
+      if (PHP.isFilled(e.name) && !VACCINES.includes(e.name)) {
+        const short = { flu: 'Flu (influenza)', 'covid-19': 'COVID-19', 'covid-19 booster': 'COVID-19', rsv: 'RSV' }[e.name.trim().toLowerCase()];
+        if (short) e.name = short;
+        else (e.nameOther = e.name), (e.name = 'Other');
+      }
+      if (PHP.isFilled(e.where)) addNote(e, 'Given at: ' + e.where);
+      delete e.where;
+    });
+
+    // Lifestyle: earlier fill-in answers mapped onto the new questions
+    const ls = d.lifestyle && d.lifestyle.values;
+    if (ls) {
+      if (ls.smoking === 'Former') ls.smoking = 'Used to';
+      if (ls.smoking === 'Current') ls.smoking = 'Yes';
+      if (ls.alcohol === 'None') ls.alcohol = 'No';
+      if (ls.exercise && !ls.activity) ls.activity = { None: 'Not active', Light: 'Lightly active', Regular: 'Moderately active', Vigorous: 'Very active' }[ls.exercise] || '';
+      if (ls.exerciseDesc && !ls.activityType) ls.activityType = ls.exerciseDesc;
+      delete ls.exercise;
+      delete ls.exerciseDesc;
+      if (PHP.isFilled(ls.diet) && !['No', 'Low sodium', 'Low sugar or diabetic', 'Heart healthy', 'Low fat', 'Vegetarian', 'Vegan', 'Gluten free', 'Other'].includes(ls.diet)) (ls.dietOther = ls.diet), (ls.diet = 'Other');
+      if (PHP.isFilled(ls.caregiver) && !['Yes', 'No'].includes(ls.caregiver)) (ls.caregiverName = ls.caregiver), (ls.caregiver = 'Yes');
+      ls.living = { 'With spouse or partner': 'Spouse or partner', 'With family': 'Family' }[ls.living] || ls.living;
+    }
+
+    // Vision, hearing and dental become three sections
+    const sv = d.senses && d.senses.values;
+    if (sv) {
+      const put = (id, vals) => {
+        const clean = Object.fromEntries(Object.entries(vals).filter(([, x]) => PHP.isFilled(x)));
+        if (Object.keys(clean).length) d[id] = { values: Object.assign((d[id] && d[id].values) || {}, clean), lists: {} };
+      };
+      // An earlier "Yes" is kept as "Yes" rather than guessing which kind
+      put('vision', { glasses: sv.glasses, rx: sv.rx, eyeExam: sv.eyeExam, notes: sv.notes });
+      put('hearing', { aids: sv.hearing, hearingExam: sv.hearingExam });
+      put('dental', { dental: sv.dental, dentures: sv.dentures === 'No' ? 'None' : sv.dentures });
+      delete d.senses;
     }
     return d;
   };
