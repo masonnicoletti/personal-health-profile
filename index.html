@@ -76,7 +76,8 @@
   <dialog id="pdfDialog" class="panel" aria-labelledby="pdfTitle">
     <form method="dialog" class="dialog-body">
       <h2 id="pdfTitle">Save PDF</h2>
-      <p class="sub">Choose what to include.</p>
+      <div class="pdf-presets" id="pdfPresets" role="radiogroup" aria-label="What to include"></div>
+      <p class="sub pdf-desc" id="pdfDesc"></p>
       <div class="pdf-choices" id="pdfChoices"></div>
       <p class="sub" id="pdfEmpty" hidden>Nothing entered yet.</p>
       <div class="dialog-actions">

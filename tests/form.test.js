@@ -30,7 +30,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(order[order.length - 1] === 'notes' && order.includes('hearing'), 'Notes & Questions stays last after adding a section');
   const addable = await page.$$eval('.add-opt b', (bs) => bs.map((b) => b.textContent));
   ok(addable.includes('Vision') && addable.includes('Dental') && !addable.some((t) => /Vision, Hearing/.test(t)), 'Vision, Hearing and Dental are separate sections');
-  ok((await page.$eval('#addSection h2', (x) => x.textContent)) === 'Additional Sections' && addable.length === 10 && addable.includes('Immunizations'), 'Additional Sections shows all 10 optional sections');
+  ok((await page.$eval('#addSection h2', (x) => x.textContent)) === 'Additional Sections' && addable.length === 11 && addable.includes('Immunizations') && addable.includes('Reproductive Health'), 'Additional Sections shows all 11 optional sections');
   const rows = await page.$$eval('.add-opt', (ts) => {
     const gw = Math.round(document.querySelector('#addGrid').getBoundingClientRect().width);
     return ts.map((t) => ({ w: Math.round(t.getBoundingClientRect().width), gw, order: [...t.children].map((c) => c.className || c.tagName) }));
@@ -108,6 +108,17 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const mfields = await labels('#sec-meds .entry.editing');
   ok(mfields[0] === 'Currently taking' && !mfields.includes('For'), 'medication fields: ' + mfields.join(', '));
   ok((await S()).data.meds.lists.main[0].name === 'Aspirin', 'typing starts in the first text box');
+  ok(['Prescription or over-the-counter', 'Strength', 'Unit', 'Form', 'How much each time', 'How often', 'Pharmacy', 'Last filled', 'Refills left'].every((l) => mfields.includes(l)), 'medication details: type, strength, unit, form, amount, frequency, pharmacy, refills');
+  const medSel = (label) => page.evaluateHandle((label) => [...document.querySelectorAll('#sec-meds .entry.editing .f')].find((f) => (f.querySelector('label') || {}).textContent === label).querySelector('select'), label);
+  const freqOpts = await (await medSel('How often')).evaluate((s) => [...s.options].map((o) => o.value).filter(Boolean));
+  ok(['Once daily', 'Twice daily', 'As needed', 'Other'].every((o) => freqOpts.includes(o)), 'frequency dropdown: ' + freqOpts.join(', '));
+  ok(!(await labels('#sec-meds .entry.editing')).includes('Take it for'), '"Take it for" hidden until As needed');
+  await (await medSel('How often')).select('As needed');
+  ok((await labels('#sec-meds .entry.editing')).includes('Take it for'), 'As needed asks what it is taken for');
+  await (await medSel('Unit')).select('mg');
+  await (await medSel('Form')).select('Tablet');
+  const med = (await S()).data.meds.lists.main[0];
+  ok(med.freq === 'As needed' && med.unit === 'mg' && med.form === 'Tablet', 'medication dropdowns saved');
   await page.click('#sec-meds .entry.editing .btn.primary');
 
   // Immunizations: an additional section with a vaccine dropdown and "Administered at"
@@ -151,7 +162,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const pv = '#sec-providers .entry.editing';
   await page.click('#sec-providers .btn.add');
   const pfields = await labels(pv);
-  ok(pfields[0] === 'Currently seeing' && pfields[1] === 'Prefix' && pfields[2] === 'Name', 'provider prefix comes before name: ' + pfields.slice(0, 3).join(', '));
+  ok(pfields[0] === 'Currently seeing' && pfields[1] === 'Prefix' && pfields[2] === 'Name' && pfields[3] === 'Credentials', 'prefix, name, then credentials: ' + pfields.slice(0, 4).join(', '));
+  const specOpts = await page.$$eval(pv + ' select', (ss) => [...ss].map((s) => [...s.options].map((o) => o.value)).find((o) => o.includes('Primary care')));
+  ok(specOpts.includes('Pharmacy'), 'Pharmacy is a provider type');
   const prefixOpts = await page.$$eval(pv + ' select', (ss) => [...ss[0].options].map((o) => o.value).filter(Boolean));
   ok(prefixOpts[0] === 'Dr.' && prefixOpts.includes('Other'), 'prefix options: ' + prefixOpts.join(', '));
   ok(['Street address', 'Suite or unit', 'City', 'State', 'ZIP code'].every((l) => pfields.includes(l)) && !pfields.includes('Address'), 'provider address in parts');
@@ -189,6 +202,25 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(fam.rel === 'Father' && fam.conditions.length === 2 && fam.conditions[0].name === 'Stroke' && fam.conditions[1].name === 'Gout', 'conditions saved for one relative');
   await page.click(fm + ' .btn.primary');
   ok((await page.$eval('#sec-family .entry-sum', (e) => e.innerText)).includes('Stroke, Gout'), 'summary lists the conditions');
+  // Removing a condition can be undone
+  await page.click('#sec-family .entry .edit');
+  await clickText(fm + ' .link.danger', 'Remove condition');
+  ok((await S()).data.family.lists.main[0].conditions.length === 1 && !!(await page.$('.toast button')), 'removing a condition offers Undo');
+  await page.click('.toast button');
+  await wait(100);
+  ok((await S()).data.family.lists.main[0].conditions.map((c) => c.name).join() === 'Stroke,Gout', 'Undo brings the condition back');
+
+  // Reproductive Health follows the sex chosen in Basic Information
+  await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.querySelector('b').textContent === 'Reproductive Health').click());
+  const rp = await labels('#sec-reproductive');
+  ok(['Number of pregnancies', 'Have you gone through menopause?', 'Last mammogram', 'Last Pap test', 'Last prostate screening (PSA)'].every((l) => rp.includes(l)), 'all questions shown when sex is not Female or Male');
+  await page.evaluate(() => { PHP._debug.state.data.basic.values.sex = 'Male'; });
+  const male = await page.evaluate(() => { const s = PHP.SECTIONS.find((x) => x.id === 'reproductive'); return PHP.visibleFields(s.fields, {}).map((f) => f.label); });
+  ok(male.includes('Last prostate screening (PSA)') && !male.includes('Number of pregnancies') && !male.includes('Last mammogram'), 'Male shows prostate screening, not pregnancy or mammogram');
+  await page.evaluate(() => { PHP._debug.state.data.basic.values.sex = 'Female'; });
+  const female = await page.evaluate(() => { const s = PHP.SECTIONS.find((x) => x.id === 'reproductive'); return PHP.visibleFields(s.fields, {}).map((f) => f.label); });
+  ok(!female.includes('Last prostate screening (PSA)') && female.includes('Number of pregnancies'), 'Female shows pregnancy, not prostate screening');
+  await page.evaluate(() => { PHP._debug.state.data.basic.values.sex = ''; });
 
   // Emergency contacts have notes
   await open('emergency');
@@ -203,11 +235,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       basic: { values: { first: 'Ann', lang: 'English' } },
       conditions: { lists: { main: [{ id: 'c1', name: 'Diabetes', by: 'Dr. Lee' }, { id: 'c2', name: 'Gout' }] } },
       dxhistory: { lists: { main: [{ id: 'c3', name: 'Shingles', resolved: '2019--' }] } },
-      meds: { lists: { main: [{ id: 'm1', name: 'Aspirin', purpose: 'Heart', current: true }] } },
+      meds: { lists: { main: [{ id: 'm1', name: 'Aspirin', purpose: 'Heart', current: true }, { id: 'm2', name: 'Lasix', dose: '40 mg', freq: 'once daily' }, { id: 'm3', name: 'Insulin', dose: '10 units at night', freq: 'Twice daily with meals' }] } },
       allergies: { lists: { main: [{ id: 'a1', name: 'penicillin', reaction: 'Hives', severity: 'Severe' }, { id: 'a2', name: 'Strawberries' }] } },
       immunizations: { lists: { main: [{ id: 'i1', name: 'Flu', where: 'CVS' }, { id: 'i2', name: 'Yellow fever', notes: 'Given at: Travel clinic\nBooster not needed' }] } },
       family: { lists: { main: [{ id: 'f1', rel: 'mother', name: 'Diabetes', age: '60', status: 'Living' }, { id: 'f2', rel: 'Mother', name: 'Glaucoma', status: 'Living' }, { id: 'f3', rel: 'Great-uncle', name: 'Gout' }] } },
-      providers: { lists: { main: [{ id: 'p1', name: 'Dr. Lee', address: '9 Elm St\nRichmond, VA 23220', current: true }] } },
+      providers: { lists: { main: [{ id: 'p1', name: 'Dr. Lee', address: '9 Elm St\nRichmond, VA 23220', current: true }, { id: 'p2', name: 'Sam Rivera, PA-C' }, { id: 'p3', name: 'Jo Park MD' }] } },
       lifestyle: { values: { smoking: 'Former', exercise: 'Regular', exerciseDesc: 'Swimming', diet: 'Keto', caregiver: 'Jane' } },
       senses: { values: { glasses: 'Yes', hearing: 'No', dental: '2025-01-', notes: 'Bifocals' } },
     },
@@ -218,10 +250,15 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const m = st.data;
   ok(m.conditions.lists.main.length === 3 && !m.dxhistory && m.conditions.lists.main[0].q === 'Diabetes' && /Managed by: Dr. Lee/.test(m.conditions.lists.main[0].notes) && m.conditions.lists.main[2].current === false, 'conditions and diagnosis history merged, Managed by kept in notes');
   ok(!('purpose' in m.meds.lists.main[0]) && m.meds.lists.main[0].notes === 'For: Heart', 'medication For moved to notes');
+  const [, lasix, insulin] = m.meds.lists.main;
+  ok(lasix.strength === '40' && lasix.unit === 'mg' && lasix.freq === 'Once daily' && !('dose' in lasix), 'typed "40 mg" becomes strength and unit; frequency matched');
+  ok(insulin.amount === '10 units at night' && insulin.freq === 'Other' && insulin.freqOther === 'Twice daily with meals', 'unmatched dose and frequency are kept word for word');
   ok(m.allergies.lists.main[0].q === 'Penicillin' && m.allergies.lists.main[0].reaction === 'Hives or rash' && m.allergies.lists.main[1].q === 'Other', 'allergies linked to the checklist');
   const im = m.immunizations.lists.main;
   ok(im[0].name === 'Flu (influenza)' && im[0].location === 'CVS' && !im[0].notes && im[1].nameOther === 'Yellow fever' && im[1].location === 'Travel clinic' && im[1].notes === 'Booster not needed', 'Given at becomes Administered at, including notes from the last update');
   ok(m.providers.lists.main[0].prefix === 'Dr.' && m.providers.lists.main[0].name === 'Lee', 'a title in a provider name becomes the prefix');
+  const [, sam, jo] = m.providers.lists.main;
+  ok(sam.name === 'Sam Rivera' && sam.credentials === 'PA-C' && jo.name === 'Jo Park' && jo.credentials === 'MD', 'credentials typed after a name move to their own box');
   const fmig = m.family.lists.main;
   ok(fmig.length === 2 && fmig[0].rel === 'Mother' && fmig[0].conditions.map((c) => c.name).join() === 'Diabetes,Glaucoma' && fmig[1].rel === 'Other' && fmig[1].relOther === 'Great-uncle', 'family entries grouped by relative: ' + JSON.stringify(fmig.map((e) => [e.rel, (e.conditions || []).length])));
   ok(m.providers.lists.main[0].street === '9 Elm St' && m.providers.lists.main[0].zip === '23220' && !('address' in m.providers.lists.main[0]), 'provider address split');
@@ -243,8 +280,29 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.click('#sec-family .entry.editing .btn.primary');
   await page.click('#sec-providers .entry .edit');
   await (await page.$('#sec-providers')).screenshot({ path: OUT + '/v4-providers.png' });
+  await page.evaluate(() => [...document.querySelectorAll('#sec-meds .entry')].find((e) => e.innerText.startsWith('Acetaminophen')).querySelector('.edit').click());
+  await (await page.$('#sec-meds')).screenshot({ path: OUT + '/v7-meds-edit.png' });
+  const pharmacies = await page.$$eval('#sec-meds .entry.editing datalist option', (os) => os.map((o) => o.value));
+  ok(pharmacies.includes('Main Street Pharmacy'), 'medication Pharmacy box suggests pharmacies from Providers');
+  await page.click('#sec-meds .entry.editing .btn.primary');
+  await (await page.$('#sec-reproductive')).screenshot({ path: OUT + '/v7-reproductive.png' });
+
   const b64 = await page.evaluate(() => PHP.buildPdf(PHP._debug.state, PHP.SECTIONS.map((s) => s.id), { save: false }).output('datauristring').split(',')[1]);
   fs.writeFileSync(OUT + '/sample.pdf', Buffer.from(b64, 'base64'));
+  // Short sections are not split across pages: Lifestyle's heading and its last row land on the same page
+  const lifestylePages = await page.evaluate(() => {
+    const doc = PHP.buildPdf(PHP._debug.state, PHP.SECTIONS.map((s) => s.id), { save: false });
+    const pages = doc.internal.pages.slice(1).map((p) => p.join('\n'));
+    return [pages.findIndex((p) => p.includes('(Lifestyle & Social)')), pages.findIndex((p) => p.includes('(Daytime only)'))];
+  });
+  ok(lifestylePages[0] >= 0 && lifestylePages[0] === lifestylePages[1], 'Lifestyle is not split across pages: ' + lifestylePages.join(' / '));
+
+  // Emergency summary and wallet card fit on one page each
+  for (const [fn, file] of [['buildEmergencyPdf', 'emergency.pdf'], ['buildWalletPdf', 'wallet.pdf']]) {
+    const out = await page.evaluate((fn) => { const d = PHP[fn](PHP._debug.state, { save: false }); return { pages: d.getNumberOfPages(), b64: d.output('datauristring').split(',')[1] }; }, fn);
+    fs.writeFileSync(OUT + '/' + file, Buffer.from(out.b64, 'base64'));
+    ok(out.pages === 1, `${file} is one page`);
+  }
 
   // Mobile
   await page.setViewport({ width: 390, height: 844, isMobile: true });

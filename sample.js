@@ -89,11 +89,12 @@
       meds: {
         lists: {
           main: L([
-            { current: true, name: 'Lisinopril', dose: '20 mg', freq: 'Once daily, morning', prescriber: 'Dr. Anita Patel', start: '2008-09-' },
-            { current: true, name: 'Metformin', dose: '500 mg', freq: 'Twice daily with meals', prescriber: 'Dr. Linh Nguyen', start: '2015-06-' },
-            { current: true, name: 'Atorvastatin', dose: '10 mg', freq: 'Once daily, evening', prescriber: 'Dr. Anita Patel', start: '2017-03-' },
-            { current: false, name: 'Tamoxifen', dose: '20 mg', start: '2012-02-', end: '2017-02-', prescriber: 'Dr. Chidi Okafor', reason: 'Completed 5-year course' },
-            { current: false, name: 'Amlodipine', dose: '5 mg', start: '2008-02-', end: '2008-09-', reason: 'Ankle swelling' },
+            { current: true, name: 'Lisinopril', type: 'Prescription', strength: '20', unit: 'mg', form: 'Tablet', amount: '1 tablet', freq: 'Once daily', prescriber: 'Dr. Anita Patel', pharmacy: 'Main Street Pharmacy', start: '2008-09-', lastFilled: '2026-10-28', refills: '3' },
+            { current: true, name: 'Metformin', type: 'Prescription', strength: '500', unit: 'mg', form: 'Tablet', amount: '1 tablet with meals', freq: 'Twice daily', prescriber: 'Dr. Linh Nguyen', pharmacy: 'Main Street Pharmacy', start: '2015-06-', lastFilled: '2026-10-28', refills: '5' },
+            { current: true, name: 'Atorvastatin', type: 'Prescription', strength: '10', unit: 'mg', form: 'Tablet', amount: '1 tablet', freq: 'At bedtime', prescriber: 'Dr. Anita Patel', pharmacy: 'Main Street Pharmacy', start: '2017-03-', refills: '2' },
+            { current: true, name: 'Acetaminophen', type: 'Over-the-counter', strength: '500', unit: 'mg', form: 'Tablet', amount: '1 to 2 tablets', freq: 'As needed', prnFor: 'knee pain' },
+            { current: false, name: 'Tamoxifen', type: 'Prescription', strength: '20', unit: 'mg', form: 'Tablet', start: '2012-02-', end: '2017-02-', prescriber: 'Dr. Chidi Okafor', reason: 'Completed 5-year course' },
+            { current: false, name: 'Amlodipine', type: 'Prescription', strength: '5', unit: 'mg', form: 'Tablet', start: '2008-02-', end: '2008-09-', reason: 'Ankle swelling' },
           ]),
         },
       },
@@ -128,9 +129,10 @@
         lists: {
           main: L([
             { current: true, prefix: 'Dr.', name: 'Anita Patel', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2006--' },
-            { current: true, prefix: 'Mr.', name: 'Sam Rivera, PA-C', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2022--' },
+            { current: true, name: 'Sam Rivera', credentials: 'PA-C', specialty: 'Primary care', office: 'Albemarle Family Medicine', phone: '(434) 555-0100', ...ALBEMARLE, start: '2022--' },
             { current: true, prefix: 'Dr.', name: 'Linh Nguyen', specialty: 'Endocrinology', office: 'UVA Endocrinology', phone: '(434) 555-0155', ...UVA, start: '2015--' },
             { current: false, prefix: 'Dr.', name: 'Chidi Okafor', specialty: 'Oncology', office: 'UVA Cancer Center', phone: '(434) 555-0160', ...UVA, start: '2011--', end: '2017--', reason: 'Completed treatment' },
+            { current: true, specialty: 'Pharmacy', office: 'Main Street Pharmacy', phone: '(434) 555-0190', street: '310 E Main Street', city: 'Charlottesville', state: 'VA', zip: '22902' },
           ]),
         },
       },
@@ -185,8 +187,9 @@
         },
       },
       vision: { values: { glasses: 'Glasses', rx: 'Reading +2.00', eyeExam: '2026-03-', eyeConditions: 'Early cataract, left eye' } },
+      reproductive: { values: { pregnancies: '2', births: '2', menopause: 'Yes', menopauseAge: '51', hormones: 'No', mammogram: '2026-02-', boneDensity: '2024-06-' } },
     },
-    added: ['immunizations', 'appointments', 'vision'],
+    added: ['immunizations', 'appointments', 'reproductive', 'vision'],
     open: { basic: true },
   });
 })();

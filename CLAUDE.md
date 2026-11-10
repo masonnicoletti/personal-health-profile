@@ -75,7 +75,10 @@ Scripts load in order from `index.html` and share one global namespace, `window.
 
 **PDF preview** (in `app.js`) renders the same jsPDF output to canvases with PDF.js (`vendor/pdfjs/`), injected as a script only on first use. PDF.js is deliberately not in the service worker's `ASSETS`, to avoid a 1.4 MB download for everyone; it's cached once used.
 
-**`pdf.js`** prints only what is filled in. Empty fields, columns, entries and sections are omitted, columns are built with `PHP.outputCols`, and split lists print separate Current and Past tables.
+**`pdf.js`** has three outputs, chosen by the presets in the Save PDF panel (`PRESETS` in `app.js`; the last choice and a custom selection are kept in `php.meta.v1`):
+- `buildPdf`: the full profile or chosen sections. Prints only what is filled in: empty fields, columns, entries and sections are omitted, columns come from `PHP.outputCols` (list `merge` keeps tables narrow), and split lists print separate Current and Past tables. `keepTogether` uses a throwaway probe document to move a section to the next page when a break would strand one or two rows.
+- `buildEmergencyPdf`: one page of allergies, current medications and conditions, key facts and emergency contacts; it retries at smaller type sizes until it fits.
+- `buildWalletPdf`: a 3.5 × 2 in fold-over card drawn on a letter page.
 
 **`sw.js`** is network-first with a cache fallback, so updates reach users on their next load. When adding a new static file, add it to `ASSETS` there too, or it won't work offline.
 

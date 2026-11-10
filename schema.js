@@ -73,11 +73,43 @@
     return [...seen.values()];
   };
   PHP.officeNames = () => uniq(PHP.providers().map((p) => p.office));
-  PHP.providerName = (p) => [PHP.ov(p, 'prefix'), p.name].filter((x) => PHP.isFilled(x)).join(' ');
+  // "Dr. Anita Patel", "Sam Rivera, PA-C"
+  PHP.providerName = (p) => {
+    const base = [PHP.ov(p, 'prefix'), p.name].filter((x) => PHP.isFilled(x)).join(' ');
+    const cred = PHP.ov(p, 'credentials');
+    return base && PHP.isFilled(cred) ? `${base}, ${cred}` : base;
+  };
   PHP.currentProviderNames = () => uniq(PHP.providers().filter(PHP.isCurrent).map(PHP.providerName));
+  // Pharmacies listed under Providers, plus any already typed on a medication
+  PHP.pharmacyNames = () => {
+    const d = PHP.getState().data;
+    const fromProviders = PHP.providers()
+      .filter((p) => p.specialty === 'Pharmacy')
+      .map((p) => p.office || p.name);
+    const fromMeds = ((d.meds && d.meds.lists && d.meds.lists.main) || []).map((m) => m.pharmacy);
+    return uniq(fromProviders.concat(fromMeds));
+  };
+
+  // Medication wording shared by the form, the full PDF and the emergency summary
+  PHP.medStrength = (e) => [PHP.isFilled(e.strength) && [e.strength, PHP.ov(e, 'unit')].filter(Boolean).join(' '), PHP.isFilled(e.form) && PHP.ov(e, 'form').toLowerCase()].filter(Boolean).join(' ');
+  PHP.medFreq = (e) => {
+    const f = PHP.ov(e, 'freq');
+    return f === 'As needed' && PHP.isFilled(e.prnFor) ? `As needed for ${e.prnFor.trim()}` : f;
+  };
 
   const STATES = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'Other'];
-  const SPECIALTIES = ['Primary care', 'Audiology', 'Cardiology', 'Dentistry', 'Dermatology', 'Endocrinology', 'Gastroenterology', 'Geriatrics', 'Nephrology', 'Neurology', 'Oncology', 'Ophthalmology', 'Optometry', 'Orthopedics', 'Physical therapy', 'Podiatry', 'Psychiatry', 'Counseling', 'Pulmonology', 'Rheumatology', 'Urology', 'Other'];
+  const SPECIALTIES = ['Primary care', 'Audiology', 'Cardiology', 'Dentistry', 'Dermatology', 'Endocrinology', 'Gastroenterology', 'Geriatrics', 'Nephrology', 'Neurology', 'Oncology', 'Ophthalmology', 'Optometry', 'Orthopedics', 'Physical therapy', 'Podiatry', 'Psychiatry', 'Counseling', 'Pulmonology', 'Rheumatology', 'Urology', 'Pharmacy', 'Other'];
+  const CREDENTIALS = ['MD', 'DO', 'NP', 'PA-C', 'RN', 'DDS', 'DMD', 'OD', 'PharmD', 'DPT', 'PhD', 'PsyD', 'LCSW', 'Other'];
+  const FREQUENCIES = ['Once daily', 'Twice daily', 'Three times daily', 'Four times daily', 'At bedtime', 'Every other day', 'Once weekly', 'Once monthly', 'As needed', 'Other'];
+  const UNITS = ['mg', 'mcg', 'g', 'mL', 'units', '%', 'Other'];
+  const FORMS = ['Tablet', 'Capsule', 'Liquid', 'Inhaler', 'Injection', 'Patch', 'Cream or ointment', 'Drops', 'Spray', 'Other'];
+  // Reproductive health questions follow the sex chosen in Basic Information (both show when it's blank or Other)
+  const sexOf = () => {
+    const b = PHP.getState().data.basic;
+    return (b && b.values && b.values.sex) || '';
+  };
+  const notMale = () => sexOf() !== 'Male';
+  const notFemale = () => sexOf() !== 'Female';
   const RELATIONS = ['Spouse', 'Partner', 'Son', 'Daughter', 'Parent', 'Sibling', 'Grandchild', 'Other relative', 'Friend', 'Neighbor', 'Caregiver', 'Other'];
   const PREFIXES = ['Dr.', 'Mr.', 'Mrs.', 'Ms.', 'Mx.', 'Prof.', 'Other'];
   const RELATIVES = [
@@ -345,16 +377,34 @@
         fields: [
           { k: 'current', label: 'Currently taking', type: 'check', w: 'full', meta: true, defaultOn: true },
           { k: 'name', label: 'Medication', type: 'text', w: 'half' },
-          { k: 'dose', label: 'Dose', type: 'text', w: 'half', ph: 'e.g. 10 mg' },
-          { k: 'freq', label: 'How often', type: 'text', w: 'half', ph: 'e.g. twice daily' },
+          { k: 'type', label: 'Prescription or over-the-counter', type: 'select', opts: ['Prescription', 'Over-the-counter'], w: 'half' },
+          { k: 'strength', label: 'Strength', type: 'number', w: 'third', ph: 'e.g. 10' },
+          { k: 'unit', label: 'Unit', type: 'select', opts: UNITS, w: 'third' },
+          { k: 'form', label: 'Form', type: 'select', opts: FORMS, w: 'third' },
+          { k: 'amount', label: 'How much each time', type: 'text', w: 'half', ph: 'e.g. 1 tablet' },
+          { k: 'freq', label: 'How often', type: 'select', opts: FREQUENCIES, w: 'half' },
+          { k: 'prnFor', label: 'Take it for', type: 'text', w: 'full', ph: 'e.g. pain, trouble sleeping', showIf: (v) => v.freq === 'As needed' },
           { k: 'prescriber', label: 'Prescribed by', type: 'text', w: 'half', suggest: () => PHP.currentProviderNames() },
+          { k: 'pharmacy', label: 'Pharmacy', type: 'text', w: 'half', suggest: () => PHP.pharmacyNames() },
           { k: 'start', label: 'Started', type: 'date', w: 'half' },
+          { k: 'lastFilled', label: 'Last filled', type: 'date', w: 'half', showIf: (v) => v.current !== false },
+          { k: 'refills', label: 'Refills left', type: 'number', w: 'half', showIf: (v) => v.current !== false },
           { k: 'end', label: 'Stopped', type: 'date', w: 'half', showIf: notCurrent },
           { k: 'reason', label: 'Reason stopped', type: 'text', w: 'full', showIf: notCurrent },
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
+        // The PDF combines related boxes so the table stays readable
+        merge: [
+          { label: 'Medication', keys: ['name', 'type'], join: (t) => [t.name, t.type === 'Over-the-counter' && '(over-the-counter)'].filter(Boolean).join(' ') },
+          { label: 'Strength', keys: ['strength', 'unit', 'form'], join: (t) => [[t.strength, t.strength && t.unit].filter(Boolean).join(' '), t.form && t.form.toLowerCase()].filter(Boolean).join(' ') },
+          { label: 'How often', keys: ['freq', 'prnFor'], join: (t) => (t.freq === 'As needed' && t.prnFor ? `As needed for ${t.prnFor}` : t.freq) },
+          { label: 'Refills', keys: ['refills', 'lastFilled'], join: (t) => [t.refills && `${t.refills} left`, t.lastFilled && `last filled ${t.lastFilled}`].filter(Boolean).join(', ') },
+        ],
         title_: (e) => e.name,
-        sub: (e) => (PHP.isCurrent(e) ? [e.dose, e.freq].filter(Boolean).join(' · ') : [e.dose, range(e.start, e.end), e.reason].filter(Boolean).join(' · ')),
+        sub: (e) =>
+          PHP.isCurrent(e)
+            ? [PHP.medStrength(e), e.amount, PHP.medFreq(e)].filter(Boolean).join(' · ')
+            : [PHP.medStrength(e), range(e.start, e.end), e.reason].filter(Boolean).join(' · '),
       },
     },
 
@@ -451,7 +501,8 @@
         fields: [
           { k: 'current', label: 'Currently seeing', type: 'check', w: 'full', meta: true, defaultOn: true },
           { k: 'prefix', label: 'Prefix', type: 'select', opts: PREFIXES, w: 'third' },
-          { k: 'name', label: 'Name', type: 'text', w: 'twothird' },
+          { k: 'name', label: 'Name', type: 'text', w: 'third' },
+          { k: 'credentials', label: 'Credentials', type: 'select', opts: CREDENTIALS, w: 'third' },
           { k: 'specialty', label: 'Specialty', type: 'select', opts: SPECIALTIES, w: 'half' },
           { k: 'office', label: 'Office', type: 'text', w: 'half', suggest: () => PHP.officeNames() },
           { k: 'phone', label: 'Phone', type: 'phone', w: 'half' },
@@ -462,7 +513,7 @@
           { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
         ],
         merge: [
-          { label: 'Name', keys: ['prefix', 'name'], join: (t) => [t.prefix, t.name].filter(Boolean).join(' ') },
+          { label: 'Name', keys: ['prefix', 'name', 'credentials'], join: (t) => [t.prefix, t.name].filter(Boolean).join(' ') + (t.name && t.credentials ? `, ${t.credentials}` : '') },
           { label: 'Office', keys: ['office', 'street', 'unit', 'city', 'state', 'zip'], join: (t) => [t.office, oneLine(t).join(', ')].filter(Boolean).join('\n') },
         ],
         // Typing an office that is already listed fills in its address and phone
@@ -667,6 +718,38 @@
         title_: (e) => e.name,
         sub: (e) => [PHP.fmtDate(e.date), e.result && e.result.split('\n')[0].slice(0, 50)].filter(Boolean).join(' · '),
       },
+    },
+    {
+      id: 'reproductive',
+      title: 'Reproductive Health',
+      optional: true,
+      blurb: 'Pregnancies, menopause, sex-specific screenings',
+      kind: 'profile',
+      info: {
+        what: 'Pregnancies, menopause and screenings specific to your sex.',
+        why: 'Doctors ask about these on most intake forms, and they affect screening and treatment choices. Questions follow the sex chosen in Basic Information.',
+      },
+      fields: [
+        { type: 'heading', label: 'Pregnancy', showIf: notMale },
+        { k: 'pregnancies', label: 'Number of pregnancies', type: 'number', w: 'third', showIf: notMale },
+        { k: 'births', label: 'Number of births', type: 'number', w: 'third', showIf: notMale },
+        { k: 'cesareans', label: 'C-sections', type: 'number', w: 'third', showIf: notMale },
+        { k: 'pregnancyNotes', label: 'Complications or notes', pdfLabel: 'Pregnancy notes', type: 'text', w: 'full', showIf: notMale },
+
+        { type: 'heading', label: 'Periods & menopause', showIf: notMale },
+        { k: 'menopause', label: 'Have you gone through menopause?', pdfLabel: 'Menopause', type: 'select', opts: ['No', 'Going through it now', 'Yes'], w: 'half', showIf: notMale },
+        { k: 'menopauseAge', label: 'Age at menopause', type: 'number', w: 'half', showIf: (v) => notMale() && v.menopause === 'Yes' },
+        { k: 'lastPeriod', label: 'First day of last period', type: 'date', w: 'half', showIf: (v) => notMale() && !!v.menopause && v.menopause !== 'Yes' },
+        { k: 'hormones', label: 'Hormone therapy or birth control', pdfLabel: 'Hormones', type: 'select', opts: ['No', 'Yes'], w: 'half', showIf: notMale },
+        { k: 'hormonesDesc', label: 'Which one?', pdfLabel: 'Hormone details', type: 'text', w: 'half', showIf: (v) => notMale() && v.hormones === 'Yes' },
+
+        { type: 'heading', label: 'Screenings' },
+        { k: 'mammogram', label: 'Last mammogram', type: 'date', w: 'half', showIf: notMale },
+        { k: 'pap', label: 'Last Pap test', type: 'date', w: 'half', showIf: notMale },
+        { k: 'psa', label: 'Last prostate screening (PSA)', type: 'date', w: 'half', showIf: notFemale },
+        { k: 'boneDensity', label: 'Last bone density scan', type: 'date', w: 'half' },
+        { k: 'notes', label: 'Notes', type: 'long', w: 'full' },
+      ],
     },
     {
       id: 'vitals',
@@ -999,6 +1082,35 @@
       if (m) {
         p.prefix = PREFIXES.find((x) => x.toLowerCase() === m[1].toLowerCase() + '.');
         p.name = m[2];
+      }
+    });
+
+    // Providers: credentials typed after the name ("Sam Rivera, PA-C") move to their own box
+    ((d.providers && d.providers.lists && d.providers.lists.main) || []).forEach((p) => {
+      if (PHP.isFilled(p.credentials) || !PHP.isFilled(p.name)) return;
+      const m = p.name.trim().match(/^(.+?),?\s+([A-Za-z.-]+)$/);
+      const cred = m && CREDENTIALS.find((c) => c !== 'Other' && c.toLowerCase() === m[2].replace(/\./g, '').toLowerCase().replace('pac', 'pa-c'));
+      if (cred) {
+        p.name = m[1].replace(/,$/, '').trim();
+        p.credentials = cred;
+      }
+    });
+
+    // Medications: a typed dose ("20 mg") becomes strength and unit; typed frequency matched to the list
+    ((d.meds && d.meds.lists && d.meds.lists.main) || []).forEach((e) => {
+      if (PHP.isFilled(e.dose)) {
+        const m = e.dose.trim().match(/^([\d.]+)\s*(mg|mcg|g|ml|units?|%)$/i);
+        if (m && !PHP.isFilled(e.strength)) {
+          e.strength = m[1];
+          e.unit = UNITS.find((u) => u.toLowerCase() === m[2].toLowerCase().replace(/^unit$/, 'units'));
+        } else if (!PHP.isFilled(e.amount)) e.amount = e.dose.trim();
+        delete e.dose;
+      }
+      if (PHP.isFilled(e.freq) && !FREQUENCIES.includes(e.freq)) {
+        // Exact matches only; anything else ("Once daily, morning") is kept word for word under Other
+        const hit = FREQUENCIES.find((f) => f !== 'Other' && f.toLowerCase() === e.freq.trim().toLowerCase());
+        if (hit) e.freq = hit;
+        else (e.freqOther = e.freq.trim()), (e.freq = 'Other');
       }
     });
 

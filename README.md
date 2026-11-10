@@ -16,7 +16,9 @@ Because of this:
 
 Basic information, lifestyle, family history, medical history (current and past conditions), medications (current and past), surgeries, allergies, providers (current and past), insurance, emergency contacts, and a notes and questions log.
 
-Under Additional Sections you can add: immunizations, an appointment log, supplements, hospital stays, tests and screenings, a vitals log, devices and implants, vision, hearing, and dental. Notes and questions always stays last.
+Under Additional Sections you can add: immunizations, an appointment log, supplements, hospital stays, tests and screenings, reproductive health, a vitals log, devices and implants, vision, hearing, and dental. Notes and questions always stays last.
+
+Save PDF offers the full profile, a "New doctor" version, a one-page emergency summary, a fold-over wallet card, or sections you choose.
 
 No field is required. The PDF includes only what you have filled in.
 
@@ -48,7 +50,7 @@ npm test
 | `styles.css` | Colors, type and layout |
 | `schema.js` | Every section and field. Edit here to add, remove or rename fields |
 | `app.js` | Form behavior, autosave, backup and restore |
-| `pdf.js` | PDF output |
+| `pdf.js` | PDF output: full profile, emergency summary and wallet card |
 | `sample.js` | Fictional sample profile, loaded from Settings → Load sample data |
 | `manifest.webmanifest`, `icons/` | Lets people install it to their Home Screen like an app |
 | `sw.js` | Offline support. Caches only the app's own files, never health information |

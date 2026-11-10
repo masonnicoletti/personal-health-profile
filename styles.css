@@ -401,6 +401,23 @@ dialog::backdrop { background: rgba(18, 48, 90, 0.35); }
 .dialog-body { padding: 24px; }
 .dialog-body h2 { font-size: 1.22rem; }
 .pdf-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; margin: 14px 0 6px; max-height: 50vh; overflow-y: auto; }
+.pdf-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.preset {
+  font: inherit;
+  font-size: 0.89rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 0 16px;
+  min-height: 42px;
+  cursor: pointer;
+}
+.preset:hover { border-color: var(--accent); }
+.preset:focus-visible { outline: none; box-shadow: var(--focus); }
+.preset[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pdf-desc { margin-top: 12px; }
 .dialog-actions { display: flex; gap: 10px; margin-top: 18px; align-items: center; flex-wrap: wrap; }
 
 .toast {

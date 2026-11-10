@@ -200,9 +200,11 @@
                     class: 'link danger',
                     text: 'Remove ' + f.itemLabel,
                     onclick: () => {
+                      snapshot();
                       items.splice(i, 1);
                       changed();
                       draw();
+                      toast(f.itemLabel[0].toUpperCase() + f.itemLabel.slice(1) + ' removed.', true);
                     },
                   })
                 )
@@ -1111,22 +1113,73 @@
   });
 
   /* ---------- Save PDF ---------- */
+  // Presets save re-ticking sections. The last choice, and a custom selection, are remembered on this device.
+  const PRESETS = [
+    { id: 'everything', label: 'Everything', desc: 'Every section you have filled in.' },
+    { id: 'doctor', label: 'New doctor', desc: 'Your full health record, without the notes, appointment and vitals logs.', skip: ['notes', 'appointments', 'vitals'] },
+    { id: 'emergency', label: 'Emergency summary', desc: 'One page: allergies, current medications, conditions, blood type and emergency contacts.', special: true },
+    { id: 'wallet', label: 'Wallet card', desc: 'A small card to cut out, fold and keep in your wallet.', special: true },
+    { id: 'custom', label: 'Choose sections', desc: 'Tick the sections to include.' },
+  ];
   const dlg = $('#pdfDialog');
+  let preset = 'everything';
+  const withData = () => active().filter((s) => PHP.sectionHasData(s, state.data[s.id]));
+  const presetOf = (id) => PRESETS.find((p) => p.id === id) || PRESETS[0];
+  const isSpecial = () => !!presetOf(preset).special;
+  const selectedIds = () => [...document.querySelectorAll('#pdfChoices input:checked')].map((c) => c.value);
+
+  function presetIds(p) {
+    const ids = withData().map((s) => s.id);
+    if (p.skip) return ids.filter((id) => !p.skip.includes(id));
+    if (p.id === 'custom') {
+      const saved = getMeta().pdfCustom;
+      return Array.isArray(saved) ? ids.filter((id) => saved.includes(id)) : ids;
+    }
+    return ids;
+  }
+  function updatePdfButtons() {
+    const ok = withData().length > 0 && (isSpecial() || selectedIds().length > 0);
+    $('#pdfGo').disabled = !ok;
+    $('#pdfPreview').disabled = !ok;
+  }
+  // keepTicks: switching to "Choose sections" because a box was ticked by hand
+  function choosePreset(id, keepTicks) {
+    const p = presetOf(id);
+    preset = p.id;
+    setMeta({ pdfPreset: p.id });
+    document.querySelectorAll('#pdfPresets .preset').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.preset === p.id)));
+    $('#pdfDesc').textContent = p.desc;
+    if (!keepTicks) {
+      const ids = presetIds(p);
+      document.querySelectorAll('#pdfChoices input').forEach((c) => (c.checked = ids.includes(c.value)));
+    }
+    const showChoices = !p.special && withData().length > 0;
+    $('#pdfChoices').hidden = !showChoices;
+    $('#pdfSelectAll').hidden = !showChoices;
+    updatePdfButtons();
+  }
+  function ticked() {
+    setMeta({ pdfCustom: selectedIds() });
+    if (preset !== 'custom') choosePreset('custom', true);
+    else updatePdfButtons();
+  }
+
   function openPdf() {
     flush();
-    const secs = active().filter((s) => PHP.sectionHasData(s, state.data[s.id]));
+    const secs = withData();
+    $('#pdfPresets').replaceChildren(
+      ...PRESETS.map((p) => h('button', { type: 'button', class: 'preset', role: 'radio', 'aria-checked': 'false', 'data-preset': p.id, text: p.label, onclick: () => choosePreset(p.id) }))
+    );
     $('#pdfChoices').replaceChildren(
       ...secs.map((s) => {
         const id = 'pdf-' + s.id;
         const cb = h('input', { type: 'checkbox', id, value: s.id });
-        cb.checked = true;
+        cb.addEventListener('change', ticked);
         return h('label', { class: 'check', for: id }, cb, s.title);
       })
     );
     $('#pdfEmpty').hidden = !!secs.length;
-    $('#pdfGo').disabled = !secs.length;
-    $('#pdfPreview').disabled = !secs.length;
-    $('#pdfSelectAll').hidden = !secs.length;
+    choosePreset(getMeta().pdfPreset || 'everything');
     dlg.showModal();
   }
   document.querySelectorAll('.pdf-open').forEach((b) => b.addEventListener('click', openPdf));
@@ -1134,8 +1187,16 @@
     const cbs = [...document.querySelectorAll('#pdfChoices input')];
     const all = cbs.every((c) => c.checked);
     cbs.forEach((c) => (c.checked = !all));
+    ticked();
   });
-  const selectedIds = () => [...document.querySelectorAll('#pdfChoices input:checked')].map((c) => c.value);
+
+  // The chosen preset's PDF; save: false returns it without downloading (for the preview)
+  function makePdf(save) {
+    const o = { save };
+    if (preset === 'emergency') return PHP.buildEmergencyPdf(state, o);
+    if (preset === 'wallet') return PHP.buildWalletPdf(state, o);
+    return PHP.buildPdf(state, selectedIds(), o);
+  }
 
   // The preview draws each PDF page with Mozilla's PDF.js, loaded only the first time it's needed
   let pdfjsLoading = null;
@@ -1161,8 +1222,7 @@
   const preview = $('#previewDialog');
   let previewRun = 0;
   async function openPreview() {
-    const ids = selectedIds();
-    if (!ids.length) return;
+    if (!isSpecial() && !selectedIds().length) return;
     const run = ++previewRun;
     const pages = $('#previewPages');
     const status = $('#previewStatus');
@@ -1171,7 +1231,7 @@
     preview.showModal();
     try {
       const lib = await loadPdfjs();
-      const data = PHP.buildPdf(state, ids, { save: false }).output('arraybuffer');
+      const data = makePdf(false).output('arraybuffer');
       const pdf = await lib.getDocument({ data }).promise;
       const width = pages.clientWidth || 600;
       const ratio = window.devicePixelRatio || 1;
@@ -1194,10 +1254,9 @@
   preview.addEventListener('close', () => previewRun++);
   $('#previewBack').addEventListener('click', () => preview.close());
   $('#previewDownload').addEventListener('click', () => {
-    const ids = selectedIds();
     preview.close();
     try {
-      PHP.buildPdf(state, ids);
+      makePdf(true);
       dlg.close();
     } catch (err) {
       console.error(err);
@@ -1206,10 +1265,9 @@
   });
 
   $('#pdfGo').addEventListener('click', () => {
-    const ids = selectedIds();
-    if (!ids.length) return;
+    if (!isSpecial() && !selectedIds().length) return;
     try {
-      PHP.buildPdf(state, ids);
+      makePdf(true);
       dlg.close();
     } catch (err) {
       console.error(err);
