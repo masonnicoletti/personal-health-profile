@@ -1,0 +1,12 @@
+{
+  "name": "personal-health-profile-tests",
+  "private": true,
+  "description": "Browser tests for Personal Health Profile. The app itself has no dependencies; these are only for testing.",
+  "scripts": {
+    "test": "node run.js",
+    "icons": "node tools/make-icons.js"
+  },
+  "devDependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}

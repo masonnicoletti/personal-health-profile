@@ -32,6 +32,16 @@ python3 -m http.server 8765
 
 Then open http://localhost:8765. To publish it, upload this folder to any static host (GitHub Pages, Netlify, Cloudflare Pages).
 
+## Tests
+
+Browser tests live in `tests/` and drive an installed Google Chrome. They need Node.js and are only for development; the app itself has no dependencies.
+
+```
+cd tests
+npm install
+npm test
+```
+
 ## Files
 
 | File | Purpose |
