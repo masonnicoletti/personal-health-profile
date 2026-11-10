@@ -108,7 +108,7 @@ p { margin: 0; }
 .brand-icon { width: 36px; height: 36px; border-radius: 9px; flex: none; display: block; }
 .home-bar .home-icon { margin-right: auto; }
 .topbar .save-status { color: var(--on-bar-sub); }
-.topbar .btn.ghost { background: #fff; color: var(--accent); border-color: #fff; }
+.topbar .btn.ghost { background: #fff; color: var(--text); border-color: #fff; }
 .topbar .btn.ghost:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
 .topbar .btn.primary { background: var(--accent); }
 .topbar .btn.primary:hover { background: #1a8fbd; }

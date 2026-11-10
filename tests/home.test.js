@@ -180,7 +180,7 @@ const clickText = (p, sel, text) =>
     const st = (sel) => { const c = getComputedStyle(document.querySelector(sel)); return [c.backgroundColor, c.color]; };
     return { settings: st('#formView .settings-open'), privacy: st('#formView .privacy-open'), save: st('#formView .pdf-open') };
   });
-  ok(colors.settings.join() === 'rgb(255, 255, 255),rgb(0, 123, 167)' && colors.privacy.join() === colors.settings.join(), 'menu bar buttons are white with cerulean text');
+  ok(colors.settings.join() === 'rgb(255, 255, 255),rgb(18, 48, 90)' && colors.privacy.join() === colors.settings.join(), 'menu bar buttons are white with dark blue text');
   ok(colors.save[0] === 'rgb(0, 123, 167)' && colors.save[1] === 'rgb(255, 255, 255)', 'Save PDF stays solid cerulean');
 
   // Phones: each menu bar stays on a single row
