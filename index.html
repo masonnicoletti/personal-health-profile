@@ -4,7 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Personal Health Profile</title>
-  <link rel="icon" href="data:,">
+  <meta name="description" content="Keep your health information in one place and bring it to appointments.">
+  <meta name="theme-color" content="#f3f5f8">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Health Profile">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -35,6 +43,7 @@
     </nav>
 
     <main id="main">
+      <div id="notices"></div>
       <div id="sections"></div>
 
       <section class="add-section card" id="addSection">

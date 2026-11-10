@@ -42,4 +42,6 @@ Then open http://localhost:8765. To publish it, upload this folder to any static
 | `app.js` | Form behavior, autosave, backup and restore |
 | `pdf.js` | PDF output |
 | `sample.js` | Fictional sample profile, loaded from Backup → Load sample data |
+| `manifest.webmanifest`, `icons/` | Lets people install it to their Home Screen like an app |
+| `sw.js` | Offline support. Caches only the app's own files, never health information |
 | `vendor/` | [jsPDF](https://github.com/parallax/jsPDF) 2.5.1 and [jsPDF-AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) 3.8.2 (MIT), included so the app works offline |

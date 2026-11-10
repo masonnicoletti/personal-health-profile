@@ -576,6 +576,8 @@
     }
     save();
     rerender(sec.id);
+    renderNotices();
+    protectStorage();
     const btn = document.querySelector(`[data-entry="${e.id}"] .edit`) || document.querySelector('#sec-' + sec.id + ' .btn.add');
     if (btn) btn.focus({ preventScroll: true });
   }
@@ -653,6 +655,7 @@
     $('#sections').replaceChildren(...active().map(renderSection));
     renderNav();
     renderAdd();
+    renderNotices();
   }
 
   // Highlight the section currently in view
@@ -721,13 +724,16 @@
     toast(msg, true);
   }
 
-  $('#exportBtn').addEventListener('click', () => {
+  function exportBackup() {
     closeMenu();
     flush();
     const payload = JSON.stringify({ ...state, app: 'Personal Health Profile', exported: new Date().toISOString() }, null, 2);
     download(new Blob([payload], { type: 'application/json' }), `health-profile-backup-${PHP.todayISO()}.json`);
+    setMeta({ lastBackup: Date.now() });
+    renderNotices();
     toast('Backup file saved.');
-  });
+  }
+  $('#exportBtn').addEventListener('click', exportBackup);
   $('#importBtn').addEventListener('click', () => {
     closeMenu();
     $('#importFile').click();
@@ -788,8 +794,124 @@
     }
   });
 
+  /* ---------- Notices: install tip and backup reminder ---------- */
+  // Kept apart from the profile so erasing or restoring a profile does not bring tips back
+  const META = 'php.meta.v1';
+  const DAY = 864e5;
+  function getMeta() {
+    try {
+      return JSON.parse(localStorage.getItem(META)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function setMeta(patch) {
+    try {
+      localStorage.setItem(META, JSON.stringify({ ...getMeta(), ...patch }));
+    } catch (e) {
+      /* tips will simply show again */
+    }
+  }
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // Filled fields plus list entries: a rough measure of how much would be lost
+  const amountEntered = () =>
+    active().reduce((n, s) => {
+      const d = state.data[s.id];
+      if (!d) return n;
+      if (s.kind === 'profile') return n + PHP.visibleFields(s.fields, d.values || {}).filter((f) => PHP.fieldFilled(f, d.values || {})).length;
+      return n + count(s);
+    }, 0);
+
+  let installEvt = null; // Chrome and Edge offer their own install prompt
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installEvt = e;
+    renderNotices();
+  });
+  window.addEventListener('appinstalled', () => {
+    installEvt = null;
+    setMeta({ installDismissed: Date.now() });
+    renderNotices();
+  });
+
+  function notice(key, title, text, actions) {
+    return h(
+      'div',
+      { class: 'notice', role: 'status', 'data-notice': key },
+      h('div', { class: 'notice-txt' }, h('b', { text: title }), h('p', { text })),
+      h('div', { class: 'notice-actions' }, actions)
+    );
+  }
+  const btn = (cls, text, onclick) => h('button', { type: 'button', class: 'btn ' + cls, text, onclick });
+
+  function renderNotices() {
+    const box = $('#notices');
+    if (!box) return;
+    const m = getMeta();
+    const now = Date.now();
+    const out = [];
+    const dismissInstall = () => {
+      setMeta({ installDismissed: now });
+      renderNotices();
+    };
+
+    if (!standalone() && !m.installDismissed) {
+      if (isIOS()) {
+        const hasData = hasAnyData();
+        out.push(
+          notice(
+            'ios',
+            'Add this to your Home Screen',
+            'Tap the Share button, then "Add to Home Screen", and open it from there. This keeps your information from being erased.' +
+              (hasData ? ' You have already entered information here, so save a backup first and restore it in the Home Screen app.' : ''),
+            [hasData && btn('ghost', 'Save backup', exportBackup), btn('primary', 'Got it', dismissInstall)]
+          )
+        );
+      } else if (installEvt) {
+        out.push(
+          notice('install', 'Install this app', 'It opens like an app and works without internet.', [
+            btn('ghost', 'Not now', dismissInstall),
+            btn('primary', 'Install', async () => {
+              installEvt.prompt();
+              await installEvt.userChoice;
+              installEvt = null;
+              renderNotices();
+            }),
+          ])
+        );
+      }
+    }
+
+    const tipOffersBackup = out.some((n) => n.dataset.notice === 'ios' && n.querySelector('.btn.ghost'));
+    const backupDue = !tipOffersBackup && amountEntered() >= 8 && (!m.lastBackup || now - m.lastBackup > 30 * DAY) && !(m.snoozeBackup > now);
+    if (backupDue) {
+      out.push(
+        notice('backup', m.lastBackup ? 'Time for a new backup' : 'Save a backup', 'Your information is stored only on this device. A backup file keeps a copy in case it is lost.', [
+          btn('ghost', 'Not now', () => {
+            setMeta({ snoozeBackup: now + 14 * DAY });
+            renderNotices();
+          }),
+          btn('primary', 'Save backup', exportBackup),
+        ])
+      );
+    }
+    box.replaceChildren(...out);
+  }
+
+  // Ask the browser not to clear this site's storage on its own
+  function protectStorage() {
+    if (!hasAnyData() || !navigator.storage || !navigator.storage.persist) return;
+    navigator.storage.persisted().then((p) => p || navigator.storage.persist()).catch(() => {});
+  }
+
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+
   /* ---------- Start ---------- */
   renderAll();
+  protectStorage();
   PHP._debug = {
     get state() {
       return state;

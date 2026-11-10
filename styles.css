@@ -419,3 +419,25 @@ dialog::backdrop { background: rgba(18, 48, 90, 0.35); }
   .pdf-choices { grid-template-columns: 1fr; }
   .info-panel { right: -6px; }
 }
+
+/* Notices (install tip, backup reminder) */
+#notices { display: flex; flex-direction: column; gap: 12px; }
+#notices:empty { display: none; }
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+  background: var(--accent-soft);
+  border: 1px solid #bfdeee;
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.notice-txt { flex: 1 1 320px; min-width: 0; }
+.notice-txt b { display: block; font-size: 0.97rem; }
+.notice-txt p { color: var(--sub); font-size: 0.89rem; margin-top: 2px; }
+.notice-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .notice { padding: 14px 16px; }
+  .notice-actions { width: 100%; justify-content: flex-end; }
+}
