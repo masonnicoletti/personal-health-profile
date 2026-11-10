@@ -819,7 +819,7 @@
     spy();
   }
 
-  // Every optional section as a tile: tap to add it, or to jump to it once added
+  // Every optional section as a full-width row: Add, title, description. Once added, the row jumps to it.
   function renderAdd() {
     const opts = PHP.SECTIONS.filter((s) => s.optional);
     $('#addGrid').replaceChildren(
@@ -833,9 +833,9 @@
             'aria-label': (added ? 'Go to ' : 'Add ') + s.title,
             onclick: () => (added ? goTo(s.id) : addSection(s)),
           },
+          h('span', { class: 'state', text: added ? 'Added' : '+ Add' }),
           h('b', { text: s.title }),
-          h('span', { class: 'blurb', text: s.blurb }),
-          h('span', { class: 'state', text: added ? 'Added' : '+ Add' })
+          h('span', { class: 'blurb', text: s.blurb })
         );
       })
     );
@@ -911,7 +911,7 @@
       if (!has) startTour(true);
     };
     $('#homeSecondary').replaceChildren(
-      ...(has ? [btn('ghost', 'Log Appointment', () => quickAdd('appointments')), btn('ghost', 'Add a Note', () => quickAdd('notes')), btn('ghost', 'Download PDF', openPdf)] : [])
+      ...(has ? [btn('ghost', 'Log Appointment', () => quickAdd('appointments')), btn('ghost', 'Add a Note', () => quickAdd('notes')), btn('ghost', 'Save PDF', openPdf)] : [])
     );
     renderNotices();
   }
@@ -937,8 +937,8 @@
     { title: 'Welcome', text: 'Your Personal Health Profile keeps all of your health information in one place.' },
     { title: 'Fill in what you like', text: 'Go through the form at your own pace. Nothing is required, so skip anything you would rather leave out.' },
     {
-      title: 'Download a PDF',
-      text: 'When you are ready, tap Download PDF at the top. Choose which sections to include, so you can make different versions to bring to appointments or share with family.',
+      title: 'Save a PDF',
+      text: 'When you are ready, tap Save PDF at the top. Choose which sections to include, so you can make different versions to bring to appointments or share with family.',
     },
     { title: 'Come back anytime', text: 'Everything saves automatically on this device. Open the app whenever you want to make changes.' },
   ];
@@ -1110,7 +1110,7 @@
     goHome();
   });
 
-  /* ---------- Download PDF ---------- */
+  /* ---------- Save PDF ---------- */
   const dlg = $('#pdfDialog');
   function openPdf() {
     flush();

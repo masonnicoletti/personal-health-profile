@@ -55,6 +55,7 @@ server.listen(0, '127.0.0.1', () => {
     }
     console.log(failed ? `\n${failed} of ${files.length} test files failed.` : `\nAll ${files.length} test files passed.`);
     server.close();
+    server.closeAllConnections(); // a test that crashed can leave its browser holding a connection open
     process.exitCode = failed ? 1 : 0;
   })();
 });

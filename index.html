@@ -20,6 +20,7 @@
   <div id="homeView" class="view">
     <header class="topbar">
       <div class="topbar-inner home-bar">
+        <img src="icons/icon-192.png" alt="Personal Health Profile" class="brand-icon home-icon" width="36" height="36">
         <button type="button" class="btn ghost" id="instrBtn">Instructions</button>
         <button type="button" class="btn ghost privacy-open">Privacy</button>
         <button type="button" class="btn ghost settings-open">Settings</button>
@@ -39,15 +40,16 @@
   <div id="formView" class="view" hidden>
     <header class="topbar">
       <div class="topbar-inner">
-        <button type="button" class="btn ghost" id="homeBtn">Home</button>
-        <div class="brand">
-          <h1>Personal Health Profile</h1>
-        </div>
+        <!-- Icon and title double as the way back to the home screen -->
+        <button type="button" class="brand" id="homeBtn" title="Home" aria-label="Personal Health Profile, back to the home screen">
+          <img src="icons/icon-192.png" alt="" class="brand-icon" width="36" height="36">
+          <span class="brand-title">Personal Health Profile</span>
+        </button>
         <div class="actions">
           <span class="save-status" id="saveStatus" aria-live="polite"></span>
           <button type="button" class="btn ghost privacy-open">Privacy</button>
           <button type="button" class="btn ghost settings-open">Settings</button>
-          <button type="button" class="btn primary pdf-open">Download PDF</button>
+          <button type="button" class="btn primary pdf-open">Save PDF</button>
         </div>
       </div>
     </header>
@@ -70,10 +72,10 @@
     </div>
   </div>
 
-  <!-- Download PDF -->
+  <!-- Save PDF -->
   <dialog id="pdfDialog" class="panel" aria-labelledby="pdfTitle">
     <form method="dialog" class="dialog-body">
-      <h2 id="pdfTitle">Download PDF</h2>
+      <h2 id="pdfTitle">Save PDF</h2>
       <p class="sub">Choose what to include.</p>
       <div class="pdf-choices" id="pdfChoices"></div>
       <p class="sub" id="pdfEmpty" hidden>Nothing entered yet.</p>
@@ -82,7 +84,7 @@
         <span class="spacer"></span>
         <button value="cancel" class="btn ghost">Cancel</button>
         <button type="button" class="btn ghost" id="pdfPreview">Preview</button>
-        <button type="button" class="btn primary" id="pdfGo">Download</button>
+        <button type="button" class="btn primary" id="pdfGo">Save</button>
       </div>
     </form>
   </dialog>
@@ -94,7 +96,7 @@
         <h2 id="previewTitle">Preview</h2>
         <div class="panel-head-actions">
           <button type="button" class="btn ghost" id="previewBack">Back</button>
-          <button type="button" class="btn primary" id="previewDownload">Download</button>
+          <button type="button" class="btn primary" id="previewDownload">Save</button>
         </div>
       </div>
       <p class="sub" id="previewStatus" aria-live="polite"></p>

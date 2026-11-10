@@ -25,14 +25,19 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // Order, with Notes & Questions last even after adding a section
   let order = await page.$$eval('.sec', (els) => els.map((e) => e.id.slice(4)));
   ok(order.join() === 'basic,conditions,lifestyle,family,meds,surgeries,allergies,providers,insurance,emergency,notes', 'section order: ' + order.join(','));
-  await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.innerText.startsWith('Hearing')).click());
+  await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.querySelector('b').textContent === 'Hearing').click());
   order = await page.$$eval('.sec', (els) => els.map((e) => e.id.slice(4)));
   ok(order[order.length - 1] === 'notes' && order.includes('hearing'), 'Notes & Questions stays last after adding a section');
   const addable = await page.$$eval('.add-opt b', (bs) => bs.map((b) => b.textContent));
   ok(addable.includes('Vision') && addable.includes('Dental') && !addable.some((t) => /Vision, Hearing/.test(t)), 'Vision, Hearing and Dental are separate sections');
   ok((await page.$eval('#addSection h2', (x) => x.textContent)) === 'Additional Sections' && addable.length === 10 && addable.includes('Immunizations'), 'Additional Sections shows all 10 optional sections');
-  const tiles = await page.$$eval('.add-opt', (ts) => ts.map((t) => { const r = t.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width), Math.round(r.height)]; }));
-  ok(new Set(tiles.map((t) => t[0])).size === 3 && tiles.every((t) => Math.abs(t[1] - t[2]) <= 1), 'tiles are squares, three across');
+  const rows = await page.$$eval('.add-opt', (ts) => {
+    const gw = Math.round(document.querySelector('#addGrid').getBoundingClientRect().width);
+    return ts.map((t) => ({ w: Math.round(t.getBoundingClientRect().width), gw, order: [...t.children].map((c) => c.className || c.tagName) }));
+  });
+  ok(rows.every((r) => r.w === r.gw) && rows.every((r) => r.order.join() === 'state,B,blurb'), 'each additional section is a full-width row: Add, title, description');
+  ok((await page.$eval('#formView .brand', (b) => !!b.querySelector('img.brand-icon') && b.textContent.trim() === 'Personal Health Profile')) && !(await page.$('#formView .btn#homeBtn')), 'form bar shows the icon beside the title, no Home button');
+  ok(!(await page.evaluate(() => document.body.innerText.includes('Download PDF'))), 'no "Download PDF" wording left');
   ok((await page.$eval('.add-opt.added', (t) => t.innerText)).includes('Added'), 'an added section is marked Added');
   const navLast = await page.$$eval('#nav .nav-link', (ls) => ls[ls.length - 1].textContent);
   ok(navLast === 'Additional Sections', 'side menu ends with Additional Sections');
@@ -107,7 +112,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // Immunizations: an additional section with a vaccine dropdown and "Administered at"
   ok(!(await page.$('#sec-immunizations')), 'Immunizations is not shown until added');
-  await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.innerText.startsWith('Immunizations')).click());
+  await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.querySelector('b').textContent === 'Immunizations').click());
   ok(!!(await page.$('#sec-immunizations')) && (await page.$eval('#sec-immunizations', (s) => s.classList.contains('open'))), 'adding Immunizations opens it');
   await page.click('#sec-immunizations .btn.add');
   const vopts = await page.$$eval('#sec-immunizations .entry.editing select option', (os) => os.map((o) => o.value));

@@ -25,6 +25,12 @@ const clickText = (p, sel, text) =>
   ok((await page.$eval('#homePrimary', (e) => e.textContent)) === 'Get Started', 'new user sees Get Started');
   ok((await page.$$('#homeSecondary button')).length === 0, 'no extra options for a new user');
   await page.screenshot({ path: OUT + '/home-1-new.png' });
+  const icon = await page.$eval('#homeView .topbar img.brand-icon', (i) => {
+    const r = i.getBoundingClientRect();
+    const bar = i.closest('.topbar-inner').getBoundingClientRect();
+    return { loaded: i.complete && i.naturalWidth > 0, left: r.left - bar.left < 40 };
+  });
+  ok(icon.loaded && icon.left, 'home bar shows the icon at the top left');
 
   await page.click('#homePrimary');
   ok((await vis(page, '#formView')) && (await page.$eval('#tourDialog', (d) => d.open)), 'Get Started opens the form, then the tutorial on top of it');
@@ -71,7 +77,7 @@ const clickText = (p, sel, text) =>
   ok((await page.$eval('#homePrimary', (e) => e.textContent)) === 'Update Profile', 'returning user sees Update Profile');
   ok((await page.$eval('#homeSub', (e) => e.textContent)) === 'Welcome back, Margaret.', 'greets by first name');
   const sec = await page.$$eval('#homeSecondary button', (bs) => bs.map((b) => b.textContent));
-  ok(sec.join() === 'Log Appointment,Add a Note,Download PDF', 'secondary options: ' + sec.join(', '));
+  ok(sec.join() === 'Log Appointment,Add a Note,Save PDF', 'secondary options: ' + sec.join(', '));
   await page.screenshot({ path: OUT + '/home-4-returning.png' });
 
   await clickText(page, '#homeSecondary button', 'Add a Note');
@@ -149,7 +155,7 @@ const clickText = (p, sel, text) =>
   // PDF preview draws every page before downloading
   await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
   await page.reload({ waitUntil: 'load' });
-  await clickText(page, '#formView .pdf-open', 'Download PDF');
+  await clickText(page, '#formView .pdf-open', 'Save PDF');
   await page.click('#pdfPreview');
   await page.waitForFunction(() => /pages?$|could not/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
   const pv = await page.evaluate(() => ({

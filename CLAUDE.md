@@ -51,7 +51,7 @@ Scripts load in order from `index.html` and share one global namespace, `window.
   - Any `select` whose options include `'Other'` automatically gets a text box stored at `<key>Other`. Use `PHP.ov(obj, key)` to read the effective value.
   - Select `opts` can be a function (e.g. offices and providers come from the Providers section via `PHP.getState()`).
 - **List options:** `merge` combines several fields into one PDF column (names, addresses), and `autofill(entry, changedKey)` pre-fills fields (providers copy address and phone from a matching office).
-- **Order:** set by the `ORDER` array at the bottom of the section list; optional sections (shown as tiles under "Additional Sections" until added) follow, and Notes & Questions is always last.
+- **Order:** set by the `ORDER` array at the bottom of the section list; optional sections (listed as rows under "Additional Sections" until added) follow, and Notes & Questions is always last.
 - **Stored value formats:**
   - Dates: `"YYYY-MM-DD"`, where any part may be blank (`"2014--"`).
   - Height: `"ft-in"`.
@@ -70,7 +70,7 @@ Scripts load in order from `index.html` and share one global namespace, `window.
   - Home: Get Started, which opens the tutorial, or Update Profile plus quick actions.
   - Form.
 - Section changes re-render the whole section via `rerender(id)`. The `editing` set (which entries are open for editing) is UI-only and not saved.
-- Dialogs (Download PDF, Settings, Instructions, tutorial, confirm) are native `<dialog>` elements. `.panel` dialogs fill the screen on phones. Close a dialog before showing a toast, because the modal's top layer hides it.
+- Dialogs (Save PDF, preview, Settings, Share, Privacy, Instructions, tutorial, confirm) are native `<dialog>` elements. `.panel` dialogs fill the screen on phones. Close a dialog before showing a toast, because the modal's top layer hides it.
 - Destructive actions call `snapshot()` first, then show an Undo toast.
 
 **PDF preview** (in `app.js`) renders the same jsPDF output to canvases with PDF.js (`vendor/pdfjs/`), injected as a script only on first use. PDF.js is deliberately not in the service worker's `ASSETS`, to avoid a 1.4 MB download for everyone; it's cached once used.
@@ -81,6 +81,7 @@ Scripts load in order from `index.html` and share one global namespace, `window.
 
 ## Design conventions the user has set
 
+- The form bar has no Home button; its icon and title lead back to the home screen (installed iPhone apps have no back gesture).
 - Easy for anyone to use: large text and tap targets, minimal wording, nothing required, plain labels. Don't frame the app or its copy around a particular age group.
 - No icons in the form. The only exceptions are the circular "?" info buttons, which show a short "What to add / Why it helps" panel.
 - Colors are tokens in `:root` in `styles.css`: deep blue menu bar (`--bar`, `#12305a`) with light text (`--on-bar`), cerulean accent (`--accent`, `#007ba7`), light grey page background. Section headers are unshaded.
