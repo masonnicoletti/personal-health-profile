@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer-core');
-const { BASE, CHROME, OUT } = require('./env');
+const { BASE, CHROME, OUT, useSample } = require('./env');
 const fs = require('fs');
 const URL = BASE + '#form';
 let fails = 0;
@@ -268,7 +268,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(await page.evaluate(() => document.querySelector('#sec-conditions').classList.contains('open')), 'open sections remembered');
 
   // Sample data + PDF
-  await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
+  await useSample(page);
   await page.reload({ waitUntil: 'load' });
   await page.evaluate(() => PHP.SECTIONS.forEach((s) => { const t = document.querySelector('#sec-' + s.id + ' .sec-toggle'); if (t && t.getAttribute('aria-expanded') === 'false') t.click(); }));
   for (const id of ['basic', 'lifestyle', 'conditions', 'allergies', 'family', 'immunizations']) {

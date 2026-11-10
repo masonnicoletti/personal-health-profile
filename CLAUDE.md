@@ -29,7 +29,7 @@ npm run icons                    # regenerate icons/ from the SVG in tools/make-
 - Each file prints PASS/FAIL lines and exits non-zero on any failure. Screenshots and a sample PDF are written to `tests/out/` (gitignored) for checking by eye.
 - Tests reach into the page through `PHP._debug.state` (live state) and `PHP.buildPdf(state, ids, { save: false })`. Timing matters: `<dialog>` close events are asynchronous, so wait briefly before asserting what a closed dialog led to.
 - When changing fields or sections, update the matching assertions (labels, section order, migration cases) and `sample.js`.
-- Settings → Load sample data fills every section with the fictional profile from `sample.js`.
+- `sample.js` (a fictional, fully filled profile) is not loaded by the app. Tests load it with `useSample(page)` from `tests/env.js`. To see it in a browser, run this in the console: `s=document.createElement('script');s.src='sample.js';s.onload=()=>{localStorage.setItem('php.profile.v1',JSON.stringify(PHP.sampleData()));location.reload()};document.head.append(s)`
 - A push to `main` is live for testers within minutes. Commit locally, then confirm with the user before pushing.
 
 ## Architecture

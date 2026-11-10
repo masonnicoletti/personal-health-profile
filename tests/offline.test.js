@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer-core');
-const { BASE, CHROME, OUT } = require('./env');
+const { BASE, CHROME, OUT, useSample } = require('./env');
 const URL = BASE;
 let fails = 0;
 const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m); };
@@ -31,7 +31,7 @@ const IOS_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebK
   ok(!(await page.$('[data-notice=backup]')) && !(await page.$('[data-notice=ios]')), 'no backup reminder or iPhone tip on an empty desktop profile');
 
   // Enough data triggers the backup reminder
-  await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
+  await useSample(page);
   await page.reload({ waitUntil: 'load' });
   ok(!!(await page.$('[data-notice=backup]')), 'backup reminder appears with lots of data');
   await page.screenshot({ path: OUT + '/pwa-1-backup.png' });
@@ -65,7 +65,7 @@ const IOS_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebK
   ok(!!(await ios.$('[data-notice=ios]')), 'iPhone tip appears');
   ok(!(await ios.$('[data-notice=ios] .btn.ghost')), 'no backup button when nothing entered');
   await ios.screenshot({ path: OUT + '/pwa-2-ios-empty.png' });
-  await ios.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
+  await useSample(ios);
   await ios.reload({ waitUntil: 'load' });
   const txt = await ios.$eval('[data-notice=ios]', (n) => n.innerText);
   ok(/save a backup first/.test(txt) && !!(await ios.$('[data-notice=ios] .btn.ghost')) && !(await ios.$('[data-notice=backup]')), 'tip mentions backup when data exists, no duplicate reminder');

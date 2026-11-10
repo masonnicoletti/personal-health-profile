@@ -24,7 +24,7 @@ Expected effort: 30–45 minutes, plus up to 15–20 minutes if load-order probl
 | `js/screens.js` | Screens (`showView`, `goForm`, `goHome`, `popstate`, Home button), `renderHome`, `quickAdd`, Tutorial and Instructions (`STEPS`, `MORE_STEPS`, tour), Privacy button, `askConfirm`, Settings (`download`, `replaceState`, `dayOf`, `openSettings`, `exportBackup`, restore, tutorial, sample, erase), Share, Notices (`standalone`, `isIOS`, `amountEntered`, install prompt listeners, `notice`, `renderNotices`, `protectStorage`) | ~330 |
 | `js/pdf-panel.js` | Save PDF: `PRESETS`, `presetIds`, `choosePreset`, `ticked`, `openPdf`, `makePdf`, `loadPdfjs`, preview, Save buttons | ~170 |
 | `js/main.js` | Start: `renderAll()`, `showView(...)`, `protectStorage()`, service worker registration, `PHP._debug` | ~20 |
-| `js/schema.js`, `js/pdf.js`, `js/sample.js` | Moved as they are, with `git mv` | n/a |
+| `js/schema.js`, `js/pdf.js`, `js/sample.js` | Moved as they are, with `git mv`. `sample.js` is not loaded by the app; update `useSample` in `tests/env.js` to `BASE + 'js/sample.js'` | n/a |
 
 Today's section markers (`/* ---------- State ---------- */` and so on) line up with these groups, so most of the move is cutting at those markers.
 
@@ -49,7 +49,7 @@ Every file stays an IIFE and shares one object: `const A = (PHP.app = PHP.app ||
    - `fields.js` (group removal) → `snapshot`, `toast`
    - `sections.js` → `fieldGrid`
    - `pdf-panel.js` → `active`, `getMeta`, `setMeta`, `toast`
-7. **Load order in `index.html`**, after the vendor scripts: `js/schema.js`, `js/pdf.js`, `js/sample.js`, `js/core.js`, `js/fields.js`, `js/sections.js`, `js/screens.js`, `js/pdf-panel.js`, `js/main.js`. Only `main.js` may run start-up code that calls into other files.
+7. **Load order in `index.html`**, after the vendor scripts: `js/schema.js`, `js/pdf.js`, `js/core.js`, `js/fields.js`, `js/sections.js`, `js/screens.js`, `js/pdf-panel.js`, `js/main.js`. Only `main.js` may run start-up code that calls into other files.
 8. **Element lookups at load** (`$('#tourDialog')`, `$('#settingsDialog')`, `$('#pdfDialog')`, `$('#previewDialog')`, `$('#shareDialog')`) are fine anywhere, because the scripts sit at the end of `<body>`. Keep each with its feature.
 9. **Keep names that collide on separate files:** `dlg` (Save PDF), `settings`, `share`, `preview` and `tour` are file-local today and should stay that way.
 
@@ -59,7 +59,7 @@ Every file stays an IIFE and shares one object: `const A = (PHP.app = PHP.app ||
 2. `git mv schema.js pdf.js sample.js js/`
 3. Create the six new files by cutting `app.js` at its section markers as listed above. Move code as it is; the only edits are the `A.` changes. No renames, no tidying, no behaviour changes. Then delete `app.js`.
 4. Update `index.html` script tags (order in point 7 above).
-5. Update `sw.js`: `ASSETS` gets the new `js/...` paths and drops `app.js`, `schema.js`, `pdf.js` and `sample.js`. Bump `CACHE` from `'php-v1'` to `'php-v2'` so phones drop the old copies.
+5. Update `sw.js`: `ASSETS` gets the new `js/...` paths and drops `app.js`, `schema.js` and `pdf.js`. Bump `CACHE` to the next version (it is `'php-v2'` as of this writing) so phones drop the old copies.
 6. Update the docs: CLAUDE.md (script load order line, `schema.js` / `app.js` / `pdf.js` mentions, the PDF preview note) and the README files table. Remove "a `js/` folder" from future plans.
 7. `cd tests && npm test`. Nothing in `tests/` references script paths (they use the DOM, `PHP._debug.state`, `PHP.buildPdf` and similar), so no test should need editing. If one does, that is a sign behaviour changed.
 8. Manual smoke test at `python3 -m http.server 8765`:

@@ -139,7 +139,7 @@
         </section>
         <section>
           <h3>Lost information can't be recovered</h3>
-          <p>Because nothing is stored anywhere else, clearing your browser data or losing your device erases it. Keep a backup.</p>
+          <p>Because nothing is stored anywhere else, clearing your browser data or losing your device erases it. Keeping a backup is recommended.</p>
         </section>
         <section>
           <h3>This is a record, not medical advice</h3>
@@ -173,10 +173,6 @@
           <b>Replay the tutorial</b>
           <span>See the welcome steps again.</span>
         </button>
-        <button type="button" class="setting" id="sampleBtn">
-          <b>Load sample data</b>
-          <span>Fill in a made-up profile to try the app.</span>
-        </button>
         <button type="button" class="setting danger" id="eraseBtn">
           <b>Erase everything</b>
           <span>Delete all information saved on this device.</span>
@@ -197,14 +193,19 @@
         <input type="text" id="shareUrl" readonly aria-label="Link to this site">
         <button type="button" class="btn primary" id="shareCopy">Copy link</button>
       </div>
-      <div class="settings-list share-list">
-        <button type="button" class="setting" id="shareNative" hidden><b>More options</b><span>Use your device's share menu.</span></button>
-        <a class="setting" id="shareText"><b>Text message</b></a>
-        <a class="setting" id="shareEmail"><b>Email</b></a>
-        <a class="setting" id="shareFacebook" target="_blank" rel="noopener"><b>Facebook</b></a>
-        <a class="setting" id="shareX" target="_blank" rel="noopener"><b>X (Twitter)</b></a>
-        <a class="setting" id="shareWhatsApp" target="_blank" rel="noopener"><b>WhatsApp</b></a>
-      </div>
+      <!-- The device's own share menu covers every app the person uses -->
+      <button type="button" class="setting share-menu" id="shareNative">
+        <b>Share with an app</b>
+        <span>Opens your device's share menu. Recommended:</span>
+        <ul class="share-apps">
+          <li>Text message</li>
+          <li>Email</li>
+          <li>WhatsApp</li>
+          <li>Facebook</li>
+          <li>Any other app on your device</li>
+        </ul>
+      </button>
+      <p class="sub share-fallback" id="shareFallback" hidden>This browser can't open a share menu. Copy the link above and paste it into a text message or email.</p>
     </form>
   </dialog>
 
@@ -250,7 +251,6 @@
   <script src="vendor/jspdf.plugin.autotable.min.js"></script>
   <script src="schema.js"></script>
   <script src="pdf.js"></script>
-  <script src="sample.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

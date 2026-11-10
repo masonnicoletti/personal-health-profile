@@ -1062,15 +1062,10 @@
   const share = $('#shareDialog');
   $('#shareBtn').addEventListener('click', () => {
     settings.close();
-    const url = siteUrl();
-    const msg = `${SHARE_TEXT} ${url}`;
-    $('#shareUrl').value = url;
-    $('#shareText').href = 'sms:?&body=' + encodeURIComponent(msg);
-    $('#shareEmail').href = 'mailto:?subject=' + encodeURIComponent('Personal Health Profile') + '&body=' + encodeURIComponent(msg);
-    $('#shareFacebook').href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url);
-    $('#shareX').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(SHARE_TEXT) + '&url=' + encodeURIComponent(url);
-    $('#shareWhatsApp').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
-    $('#shareNative').hidden = !navigator.share; // phones: the device's own share menu covers every app
+    $('#shareUrl').value = siteUrl();
+    // The device's share menu covers texts, email and every app; browsers without one get a note to copy the link
+    $('#shareNative').hidden = !navigator.share;
+    $('#shareFallback').hidden = !!navigator.share;
     $('#shareCopy').textContent = 'Copy link';
     share.showModal();
   });
@@ -1099,11 +1094,6 @@
       $('#shareCopy').textContent = 'Copied';
       setTimeout(() => ($('#shareCopy').textContent = 'Copy link'), 2500);
     } else field.select(); // leave it selected so it can be copied by hand
-  });
-  $('#sampleBtn').addEventListener('click', async () => {
-    settings.close();
-    if (hasAnyData() && !(await askConfirm('Replace your information?', 'The sample profile will replace what is here. You can undo this right after.', 'Replace'))) return;
-    replaceState(normalize(PHP.sampleData()), 'Sample data loaded.');
   });
   $('#eraseBtn').addEventListener('click', async () => {
     settings.close();

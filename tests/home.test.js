@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer-core');
-const { BASE, CHROME, OUT } = require('./env');
+const { BASE, CHROME, OUT, useSample } = require('./env');
 const URL = BASE;
 let fails = 0;
 const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m); };
@@ -72,7 +72,7 @@ const clickText = (p, sel, text) =>
   await clickText(page, '#instrDialog button', 'Close');
 
   // Returning user
-  await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
+  await useSample(page);
   await page.reload({ waitUntil: 'load' });
   ok((await page.$eval('#homePrimary', (e) => e.textContent)) === 'Update Profile', 'returning user sees Update Profile');
   ok((await page.$eval('#homeSub', (e) => e.textContent)) === 'Welcome back, Margaret.', 'greets by first name');
@@ -105,23 +105,34 @@ const clickText = (p, sel, text) =>
   // Settings
   await clickText(page, '#homeView .settings-open', 'Settings');
   const opts = await page.$$eval('#settingsDialog .setting b', (bs) => bs.map((b) => b.textContent));
-  ok(opts.join() === 'Save a backup,Restore from backup,Share this site,Replay the tutorial,Load sample data,Erase everything', 'settings: ' + opts.join(', '));
+  ok(opts.join() === 'Save a backup,Restore from backup,Share this site,Replay the tutorial,Erase everything', 'settings, without Load sample data: ' + opts.join(', '));
+  ok((await page.evaluate(() => typeof PHP.sampleData)) === 'undefined', 'sample profile is not shipped with the app');
 
-  // Share this site: link only, ready-made for text, email and social apps
+  // Share this site: one box that opens the device's share menu (stand-in here, since headless Chrome may not have one)
+  await page.evaluate(() => Object.defineProperty(navigator, 'share', { configurable: true, value: async (d) => { window.__shared = d; } }));
   await page.click('#shareBtn');
   const sh = await page.evaluate(() => ({
     open: document.querySelector('#shareDialog').open,
     url: document.querySelector('#shareUrl').value,
-    sms: document.querySelector('#shareText').href,
-    mail: document.querySelector('#shareEmail').href,
-    fb: document.querySelector('#shareFacebook').href,
-    x: document.querySelector('#shareX').href,
-    wa: document.querySelector('#shareWhatsApp').href,
+    box: !document.querySelector('#shareNative').hidden,
+    apps: [...document.querySelectorAll('#shareNative .share-apps li')].map((li) => li.textContent),
+    fallback: !document.querySelector('#shareFallback').hidden,
+    oldLinks: ['#shareText', '#shareEmail', '#shareFacebook', '#shareX', '#shareWhatsApp'].some((s) => document.querySelector(s)),
   }));
   const site = URL.split('#')[0];
   ok(sh.open && sh.url === site && !sh.url.includes('#'), 'share link is the site address: ' + sh.url);
-  ok(sh.sms.startsWith('sms:') && sh.mail.startsWith('mailto:') && sh.fb.includes(encodeURIComponent(site)) && sh.x.includes('twitter.com/intent') && sh.wa.startsWith('https://wa.me/'), 'text, email and social links prepared');
-  ok(!/Margaret|Ellis|Lisinopril/.test(Object.values(sh).join(' ')), 'no personal information in shared links');
+  ok(sh.box && !sh.fallback && sh.apps.join() === 'Text message,Email,WhatsApp,Facebook,Any other app on your device', 'share box recommends: ' + sh.apps.join(', '));
+  ok(!sh.oldLinks, 'separate text, email, Facebook, X and WhatsApp buttons are gone');
+  await page.screenshot({ path: OUT + '/home-11-share-box.png' });
+  await page.click('#shareNative');
+  const shared = await page.evaluate(() => window.__shared);
+  ok(shared && shared.url === site && !/Margaret|Ellis|Lisinopril/.test(JSON.stringify(shared)), 'the share menu gets only the link and a short message');
+  await clickText(page, '#shareDialog button', 'Close');
+  // Without a share menu, the box is replaced by a note to copy the link
+  await page.evaluate(() => Object.defineProperty(navigator, 'share', { configurable: true, value: undefined }));
+  await clickText(page, '#homeView .settings-open', 'Settings');
+  await page.click('#shareBtn');
+  ok(await page.evaluate(() => document.querySelector('#shareNative').hidden && !document.querySelector('#shareFallback').hidden), 'browsers without a share menu see the copy-link note');
   await page.browserContext().overridePermissions(site, ['clipboard-read', 'clipboard-write']);
   await page.click('#shareCopy');
   await wait(100);
@@ -153,7 +164,7 @@ const clickText = (p, sel, text) =>
   ok(await vis(page, '#formView .privacy-open'), 'form header has Privacy');
 
   // PDF preview draws every page before downloading
-  await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
+  await useSample(page);
   await page.reload({ waitUntil: 'load' });
   await clickText(page, '#formView .pdf-open', 'Save PDF');
   await page.click('#pdfPreview');
@@ -275,7 +286,7 @@ const clickText = (p, sel, text) =>
   // Phone: panels take over the screen
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await page.goto(URL, { waitUntil: 'load' });
-  await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
+  await useSample(page);
   await page.reload({ waitUntil: 'load' });
   await page.screenshot({ path: OUT + '/home-7-phone.png' });
   await clickText(page, '#homeView .settings-open', 'Settings');

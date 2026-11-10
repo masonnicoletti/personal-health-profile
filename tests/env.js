@@ -18,4 +18,10 @@ const CHROME =
 const OUT = path.join(__dirname, 'out');
 fs.mkdirSync(OUT, { recursive: true });
 
-module.exports = { BASE, CHROME, OUT };
+// The sample profile isn't part of the app users get, so tests load sample.js into the page themselves
+async function useSample(page) {
+  await page.addScriptTag({ url: BASE + 'sample.js' });
+  await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify(PHP.sampleData())));
+}
+
+module.exports = { BASE, CHROME, OUT, useSample };

@@ -385,7 +385,12 @@ input.bad { border-color: var(--danger); }
 /* Share this site */
 .share-link { display: flex; gap: 10px; margin: 14px 0 16px; }
 .share-link input { flex: 1; min-width: 0; color: var(--sub); }
-a.setting { display: block; text-decoration: none; }
+.share-menu { width: 100%; padding: 16px 18px; border-color: var(--accent); background: var(--accent-soft); }
+.share-menu b { font-size: 1.02rem; }
+.share-apps { list-style: disc; margin: 10px 0 0; padding-left: 1.2em; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; color: var(--text); font-size: 0.92rem; }
+.share-apps li::marker { color: var(--accent); }
+.share-fallback { margin-top: 4px; }
+@media (max-width: 640px) { .share-apps { grid-template-columns: 1fr; } }
 .privacy { color: var(--sub); font-size: 0.83rem; text-align: center; padding: 8px; }
 
 /* Dialog */

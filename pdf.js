@@ -343,7 +343,8 @@
   };
 
   // Sizes shared by the layout and the drawing
-  const TL = { ROW: 14, GROUP_GAP: 6, KEY: 18, AXIS: 14, LABEL_W: 140 };
+  // KEY is the gap between the heading and the year labels
+  const TL = { ROW: 14, GROUP_GAP: 6, KEY: 10, AXIS: 14, LABEL_W: 140 };
   // Height of the whole timeline below its heading, so a short one can be kept on a single page
   PHP.timelineHeight = (data) =>
     TL.KEY + TL.AXIS + data.groups.reduce((h, g) => h + TL.ROW * (g.items.length + 1) + TL.GROUP_GAP, 0) + 10 + (data.undated.length ? 16 : 0);
@@ -401,18 +402,6 @@
       ly += TL.GROUP_GAP;
     }
 
-    // Key, once, under the heading
-    let kx = M;
-    const ky = ctx.y + 6;
-    font('normal', 7.5, C.sub);
-    const key = (drawSwatch, text) => {
-      drawSwatch(kx, ky - 3);
-      doc.text(text, kx + 26, ky);
-      kx += 26 + doc.getTextWidth(text) + 18;
-    };
-    key((x, cy) => (doc.setFillColor(...C.accent), doc.roundedRect(x, cy - 3, 20, 6, 3, 3, 'F')), 'Ongoing');
-    key((x, cy) => (doc.setFillColor(...tint(C.accent)), doc.roundedRect(x, cy - 3, 20, 6, 3, 3, 'F')), 'Ended');
-    key((x, cy) => (doc.setFillColor(...PROCEDURE), doc.circle(x + 10, cy, 3, 'F')), 'Single date');
 
     let endY = ctx.y;
     chunks.forEach((ch, i) => {

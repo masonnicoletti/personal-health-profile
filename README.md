@@ -51,7 +51,7 @@ npm test
 | `schema.js` | Every section and field. Edit here to add, remove or rename fields |
 | `app.js` | Form behavior, autosave, backup and restore |
 | `pdf.js` | PDF output: full profile, emergency summary and wallet card |
-| `sample.js` | Fictional sample profile, loaded from Settings → Load sample data |
+| `sample.js` | Fictional sample profile used by the tests (not loaded by the app) |
 | `manifest.webmanifest`, `icons/` | Lets people install it to their Home Screen like an app |
 | `sw.js` | Offline support. Caches only the app's own files, never health information |
 | `vendor/` | [jsPDF](https://github.com/parallax/jsPDF) 2.5.1 and [jsPDF-AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) 3.8.2 (MIT) create the PDF; [PDF.js](https://github.com/mozilla/pdf.js) 3.11.174 (Apache 2.0) draws the preview. Included so the app works offline |

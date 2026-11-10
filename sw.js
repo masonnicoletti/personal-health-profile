@@ -2,7 +2,7 @@
  * Network first, so updates appear as soon as they are published; the cached copy is used when offline.
  * This only caches the app's own files. Health information stays in the browser's local storage.
  */
-const CACHE = 'php-v1';
+const CACHE = 'php-v2';
 const ASSETS = [
   './',
   'index.html',
@@ -10,7 +10,6 @@ const ASSETS = [
   'schema.js',
   'app.js',
   'pdf.js',
-  'sample.js',
   'manifest.webmanifest',
   'vendor/jspdf.umd.min.js',
   'vendor/jspdf.plugin.autotable.min.js',
