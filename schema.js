@@ -868,11 +868,36 @@
     },
   ];
 
-  // Display order: core sections, then any optional sections the person added, with Notes & Questions always last
-  const ORDER = ['basic', 'conditions', 'lifestyle', 'family', 'meds', 'surgeries', 'allergies', 'providers', 'insurance', 'emergency'];
-  const LAST = 'notes';
+  // Display order, following a doctor's history: who you are, conditions, allergies, medications, procedures,
+  // family and social history, then reference details. Additional sections (in brackets) sit beside their
+  // natural partner and only appear once added. The form, side menu, PDF and Additional Sections list all follow it.
+  const ORDER = [
+    'basic',
+    'conditions',
+    'reproductive', //    [after Medical History]
+    'allergies',
+    'meds',
+    'supplements', //     [after Medications]
+    'surgeries',
+    'immunizations', //   [after Surgeries]
+    'screenings', //      [after Surgeries]
+    'hospital', //        [with the procedure group]
+    'devices', //         [with the procedure group]
+    'family',
+    'lifestyle',
+    'vision', //          [after Lifestyle]
+    'hearing', //         [after Lifestyle]
+    'dental', //          [after Lifestyle]
+    'providers',
+    'insurance',
+    'emergency',
+    'vitals', //          [with the logs]
+    'appointments', //    [just before Notes]
+    'notes', // always last
+  ];
   const defined = new Map(SECTIONS.map((s, i) => [s.id, i]));
-  const rank = (s) => (s.id === LAST ? 1e6 : ORDER.includes(s.id) ? ORDER.indexOf(s.id) : ORDER.length + defined.get(s.id));
+  // Any section missing from ORDER goes just before Notes, so a new one is never lost
+  const rank = (s) => (ORDER.includes(s.id) ? ORDER.indexOf(s.id) : ORDER.length - 1.5 + defined.get(s.id) / 1000);
   SECTIONS.sort((a, b) => rank(a) - rank(b));
 
   PHP.SECTIONS = SECTIONS;

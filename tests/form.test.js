@@ -24,7 +24,20 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // Order, with Notes & Questions last even after adding a section
   let order = await page.$$eval('.sec', (els) => els.map((e) => e.id.slice(4)));
-  ok(order.join() === 'basic,conditions,lifestyle,family,meds,surgeries,allergies,providers,insurance,emergency,notes', 'section order: ' + order.join(','));
+  ok(order.join() === 'basic,conditions,allergies,meds,surgeries,family,lifestyle,providers,insurance,emergency,notes', 'section order: ' + order.join(','));
+  // Additional sections sit beside their partner once added
+  const placed = await page.evaluate(() => {
+    const all = PHP.SECTIONS.map((s) => s.id);
+    const after = (a, b) => all.indexOf(a) === all.indexOf(b) + 1;
+    return {
+      reproductive: after('reproductive', 'conditions'),
+      supplements: after('supplements', 'meds'),
+      immunizations: after('immunizations', 'surgeries') && after('screenings', 'immunizations'),
+      senses: after('vision', 'lifestyle') && after('hearing', 'vision') && after('dental', 'hearing'),
+      appointments: all.indexOf('appointments') === all.length - 2 && all[all.length - 1] === 'notes',
+    };
+  });
+  ok(Object.values(placed).every(Boolean), 'additional sections placed beside their partners: ' + JSON.stringify(placed));
   await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.querySelector('b').textContent === 'Hearing').click());
   order = await page.$$eval('.sec', (els) => els.map((e) => e.id.slice(4)));
   ok(order[order.length - 1] === 'notes' && order.includes('hearing'), 'Notes & Questions stays last after adding a section');

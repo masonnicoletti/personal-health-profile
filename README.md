@@ -14,9 +14,9 @@ Because of this:
 
 ## What it covers
 
-Basic information, lifestyle, family history, medical history (current and past conditions), medications (current and past), surgeries, allergies, providers (current and past), insurance, emergency contacts, and a notes and questions log.
+Personal information, medical history (current and past conditions), allergies, medications (current and past), surgeries and procedures, family history, lifestyle, providers (current and past), insurance, emergency contacts, and a notes and questions log.
 
-Under Additional Sections you can add: immunizations, an appointment log, supplements, hospital stays, tests and screenings, reproductive health, a vitals log, devices and implants, vision, hearing, and dental. Notes and questions always stays last.
+Under Additional Sections you can add: immunizations, an appointment log, supplements, hospital stays, tests and screenings, reproductive health, a vitals log, devices and implants, vision, hearing, and dental. Each one appears next to the section it relates to (for example, supplements after medications), and notes and questions always stays last.
 
 Save PDF offers the full profile, a "New doctor" version, a one-page emergency summary, a fold-over wallet card, or sections you choose.
 
