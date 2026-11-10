@@ -170,7 +170,7 @@ const clickText = (p, sel, text) =>
   // Fewer sections means fewer pages (timeline off here; it is tested on its own below)
   await page.evaluate(() => {
     document.querySelectorAll('#pdfChoices input').forEach((c) => (c.checked = c.value === 'meds'));
-    document.querySelector('#pdfTimeline').checked = false;
+    document.querySelector('#pdfTimeline').setAttribute('aria-checked', 'false');
   });
   await page.click('#pdfPreview');
   await page.waitForFunction(() => /^1 page$/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
@@ -178,48 +178,71 @@ const clickText = (p, sel, text) =>
   await page.click('#previewBack');
   await clickText(page, '#pdfDialog button', 'Cancel');
 
-  // Presets
+  // Layout: Choose sections first, a Special outputs row, two switches, then the section boxes; no descriptions
   await clickText(page, '#formView .pdf-open', 'Save PDF');
-  const presets = await page.$$eval('#pdfPresets .preset', (bs) => bs.map((b) => b.textContent));
-  ok(presets.join() === 'Everything,New doctor,Emergency summary,Wallet card,Choose sections', 'presets: ' + presets.join(', '));
+  const layout = await page.evaluate(() => {
+    const kids = [...document.querySelectorAll('#pdfDialog .dialog-body *')];
+    const pos = (sel) => kids.indexOf(document.querySelector(sel));
+    return {
+      first: [...document.querySelectorAll('#pdfPresets .preset')].map((b) => b.textContent),
+      special: [...document.querySelectorAll('#pdfSpecial .preset')].map((b) => b.textContent),
+      label: document.querySelector('#pdfSpecialLabel').textContent,
+      switches: [...document.querySelectorAll('#pdfToggles [role=switch]')].map((b) => b.textContent.trim()),
+      order: pos('#pdfPresets') < pos('#pdfSpecial') && pos('#pdfSpecial') < pos('#pdfToggles') && pos('#pdfToggles') < pos('#pdfChoices'),
+      descriptions: [...document.querySelectorAll('#pdfDialog p.sub')].filter((p) => !p.hidden).length,
+      oldSelectAll: !!document.querySelector('#pdfDialog .dialog-actions #pdfSelectAll'),
+    };
+  });
+  ok(layout.first.join() === 'Choose sections' && layout.special.join() === 'New doctor,Emergency summary,Wallet card' && layout.label === 'Special outputs', 'Choose sections, then Special outputs: ' + layout.special.join(', '));
+  ok(layout.switches.join() === 'Add timeline page,Select all' && layout.order, 'timeline and Select all switches sit between the presets and the section boxes');
+  ok(layout.descriptions === 0 && !layout.oldSelectAll, 'no descriptions, and no Select all button at the bottom');
+  await page.screenshot({ path: OUT + '/home-13-presets.png' });
+
   const ticks = () => page.$$eval('#pdfChoices input:checked', (cs) => cs.map((c) => c.value));
-  await clickText(page, '#pdfPresets .preset', 'New doctor');
+  const sw = (id) => page.$eval(id, (b) => b.getAttribute('aria-checked') === 'true');
+  // Select all switch
+  await page.click('#pdfSelectAll');
+  ok((await ticks()).length === 0 && !(await sw('#pdfSelectAll')) && (await page.$eval('#pdfGo', (b) => b.disabled)), 'Select all off clears every box');
+  await page.click('#pdfSelectAll');
+  ok((await ticks()).includes('notes') && (await sw('#pdfSelectAll')), 'Select all on ticks every section');
+  // New doctor
+  await clickText(page, '#pdfSpecial .preset', 'New doctor');
   const doc = await ticks();
   ok(doc.includes('meds') && doc.includes('allergies') && !doc.includes('notes') && !doc.includes('appointments'), 'New doctor leaves out the notes and appointment logs');
-  await clickText(page, '#pdfPresets .preset', 'Everything');
-  ok((await ticks()).includes('notes'), 'Everything ticks every section with information');
+  ok(!(await sw('#pdfSelectAll')), 'Select all shows off when some sections are unticked');
   // Ticking a box by hand switches to Choose sections, and that choice is remembered
   await page.click('#pdf-insurance');
-  ok((await page.$eval('#pdfPresets [aria-checked="true"]', (b) => b.textContent)) === 'Choose sections', 'changing a tick switches to Choose sections');
+  ok((await page.$eval('#pdfDialog .preset[aria-checked="true"]', (b) => b.textContent)) === 'Choose sections', 'changing a tick switches to Choose sections');
   await clickText(page, '#pdfDialog button', 'Cancel');
   await clickText(page, '#formView .pdf-open', 'Save PDF');
-  const reopened = await page.evaluate(() => ({ preset: document.querySelector('#pdfPresets [aria-checked="true"]').textContent, insurance: document.querySelector('#pdf-insurance').checked, meds: document.querySelector('#pdf-meds').checked }));
+  const reopened = await page.evaluate(() => ({ preset: document.querySelector('#pdfDialog .preset[aria-checked="true"]').textContent, insurance: document.querySelector('#pdf-insurance').checked, meds: document.querySelector('#pdf-meds').checked }));
   ok(reopened.preset === 'Choose sections' && !reopened.insurance && reopened.meds, 'last choice and custom selection are remembered');
-  // Timeline checkbox: on by default, remembered when turned off, and adds a page to the preview
-  ok(await page.$eval('#pdfTimeline', (c) => c.checked), 'timeline page is on by default');
+
+  // Timeline switch: on by default, second in the PDF (landscape), remembered when turned off
+  ok(await sw('#pdfTimeline'), 'timeline page is on by default');
   await page.click('#pdfPreview');
   await page.waitForFunction(() => /pages?$|could not/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
-  const withTimeline = await page.$$eval('#previewPages canvas', (cs) => cs.map((c) => c.width > c.height));
-  ok(withTimeline[withTimeline.length - 1] === true, 'preview ends with the landscape timeline page');
+  const shapes = await page.$$eval('#previewPages canvas', (cs) => cs.map((c) => (c.width > c.height ? 'L' : 'P')));
+  ok(shapes[0] === 'P' && shapes[1] === 'L' && shapes.slice(2).every((x) => x === 'P'), 'timeline is the second page, after Basic Information: ' + shapes.join(''));
   await page.screenshot({ path: OUT + '/home-14-timeline-preview.png' });
   await page.click('#previewBack');
   await page.click('#pdfTimeline');
   await clickText(page, '#pdfDialog button', 'Cancel');
   await clickText(page, '#formView .pdf-open', 'Save PDF');
-  ok(!(await page.$eval('#pdfTimeline', (c) => c.checked)), 'turning the timeline off is remembered');
+  ok(!(await sw('#pdfTimeline')), 'turning the timeline off is remembered');
   await page.click('#pdfTimeline');
-  // Emergency summary and wallet card: no section boxes, one-page preview
+
+  // Emergency summary and wallet card: no section boxes or switches, one-page preview
   for (const name of ['Emergency summary', 'Wallet card']) {
-    await clickText(page, '#pdfPresets .preset', name);
-    ok(await page.$eval('#pdfChoices', (c) => c.hidden), `${name}: section boxes hidden`);
+    await clickText(page, '#pdfSpecial .preset', name);
+    ok((await page.$eval('#pdfChoices', (c) => c.hidden)) && (await page.$eval('#pdfToggles', (c) => c.hidden)), `${name}: section boxes and switches hidden`);
     await page.click('#pdfPreview');
     await page.waitForFunction(() => /pages?$|could not/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
     ok((await page.$eval('#previewStatus', (s) => s.textContent)) === '1 page', `${name}: preview is one page`);
     await page.screenshot({ path: `${OUT}/home-12-${name === 'Wallet card' ? 'wallet' : 'emergency'}.png` });
     await page.click('#previewBack');
   }
-  await page.screenshot({ path: OUT + '/home-13-presets.png' });
-  await clickText(page, '#pdfPresets .preset', 'Everything');
+  await clickText(page, '#pdfPresets .preset', 'Choose sections');
   await clickText(page, '#pdfDialog button', 'Cancel');
 
   // Menu bar buttons: white with cerulean text; Save PDF stays solid cerulean

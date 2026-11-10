@@ -76,15 +76,24 @@
   <dialog id="pdfDialog" class="panel" aria-labelledby="pdfTitle">
     <form method="dialog" class="dialog-body">
       <h2 id="pdfTitle">Save PDF</h2>
-      <div class="pdf-presets" id="pdfPresets" role="radiogroup" aria-label="What to include"></div>
-      <p class="sub pdf-desc" id="pdfDesc"></p>
+      <div role="radiogroup" aria-label="What to include">
+        <div class="pdf-presets" id="pdfPresets"></div>
+        <p class="pdf-row-label" id="pdfSpecialLabel">Special outputs</p>
+        <div class="pdf-presets" id="pdfSpecial"></div>
+      </div>
+      <div class="pdf-toggles" id="pdfToggles">
+        <button type="button" class="switch" role="switch" aria-checked="true" id="pdfTimeline">
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span>Add timeline page</span>
+        </button>
+        <button type="button" class="switch" role="switch" aria-checked="true" id="pdfSelectAll">
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span>Select all</span>
+        </button>
+      </div>
       <div class="pdf-choices" id="pdfChoices"></div>
-      <label class="check pdf-timeline" id="pdfTimelineRow" for="pdfTimeline">
-        <input type="checkbox" id="pdfTimeline"> Add a timeline page
-      </label>
       <p class="sub" id="pdfEmpty" hidden>Nothing entered yet.</p>
       <div class="dialog-actions">
-        <button type="button" class="btn ghost" id="pdfSelectAll">Select all</button>
         <span class="spacer"></span>
         <button value="cancel" class="btn ghost">Cancel</button>
         <button type="button" class="btn ghost" id="pdfPreview">Preview</button>

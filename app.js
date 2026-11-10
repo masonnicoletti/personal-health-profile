@@ -1113,50 +1113,52 @@
   });
 
   /* ---------- Save PDF ---------- */
-  // Presets save re-ticking sections. The last choice, and a custom selection, are remembered on this device.
+  // Choose sections first, then the special outputs. The last choice, a custom selection and the
+  // timeline switch are remembered on this device.
   const PRESETS = [
-    { id: 'everything', label: 'Everything', desc: 'Every section you have filled in.' },
-    { id: 'doctor', label: 'New doctor', desc: 'Your full health record, without the notes, appointment and vitals logs.', skip: ['notes', 'appointments', 'vitals'] },
-    { id: 'emergency', label: 'Emergency summary', desc: 'One page: allergies, current medications, conditions, blood type and emergency contacts.', special: true },
-    { id: 'wallet', label: 'Wallet card', desc: 'A small card to cut out, fold and keep in your wallet.', special: true },
-    { id: 'custom', label: 'Choose sections', desc: 'Tick the sections to include.' },
+    { id: 'custom', label: 'Choose sections' },
+    { id: 'doctor', label: 'New doctor', row: 'special', skip: ['notes', 'appointments', 'vitals'] },
+    { id: 'emergency', label: 'Emergency summary', row: 'special', fixed: true },
+    { id: 'wallet', label: 'Wallet card', row: 'special', fixed: true },
   ];
   const dlg = $('#pdfDialog');
-  let preset = 'everything';
+  let preset = 'custom';
   const withData = () => active().filter((s) => PHP.sectionHasData(s, state.data[s.id]));
+  // Earlier versions had an "Everything" preset; it now falls back to Choose sections
   const presetOf = (id) => PRESETS.find((p) => p.id === id) || PRESETS[0];
-  const isSpecial = () => !!presetOf(preset).special;
-  const selectedIds = () => [...document.querySelectorAll('#pdfChoices input:checked')].map((c) => c.value);
+  // Emergency summary and wallet card have a fixed layout: no section boxes or switches
+  const isFixed = () => !!presetOf(preset).fixed;
+  const boxes = () => [...document.querySelectorAll('#pdfChoices input')];
+  const selectedIds = () => boxes().filter((c) => c.checked).map((c) => c.value);
+  const switchOn = (el) => el.getAttribute('aria-checked') === 'true';
+  const setSwitch = (el, on) => el.setAttribute('aria-checked', String(on));
 
   function presetIds(p) {
     const ids = withData().map((s) => s.id);
     if (p.skip) return ids.filter((id) => !p.skip.includes(id));
-    if (p.id === 'custom') {
-      const saved = getMeta().pdfCustom;
-      return Array.isArray(saved) ? ids.filter((id) => saved.includes(id)) : ids;
-    }
-    return ids;
+    const saved = getMeta().pdfCustom;
+    return Array.isArray(saved) ? ids.filter((id) => saved.includes(id)) : ids;
   }
   function updatePdfButtons() {
-    const ok = withData().length > 0 && (isSpecial() || selectedIds().length > 0);
+    const ok = withData().length > 0 && (isFixed() || selectedIds().length > 0);
     $('#pdfGo').disabled = !ok;
     $('#pdfPreview').disabled = !ok;
+    const all = boxes();
+    setSwitch($('#pdfSelectAll'), all.length > 0 && all.every((c) => c.checked));
   }
   // keepTicks: switching to "Choose sections" because a box was ticked by hand
   function choosePreset(id, keepTicks) {
     const p = presetOf(id);
     preset = p.id;
     setMeta({ pdfPreset: p.id });
-    document.querySelectorAll('#pdfPresets .preset').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.preset === p.id)));
-    $('#pdfDesc').textContent = p.desc;
+    document.querySelectorAll('#pdfDialog .preset').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.preset === p.id)));
     if (!keepTicks) {
       const ids = presetIds(p);
-      document.querySelectorAll('#pdfChoices input').forEach((c) => (c.checked = ids.includes(c.value)));
+      boxes().forEach((c) => (c.checked = ids.includes(c.value)));
     }
-    const showChoices = !p.special && withData().length > 0;
+    const showChoices = !p.fixed && withData().length > 0;
     $('#pdfChoices').hidden = !showChoices;
-    $('#pdfSelectAll').hidden = !showChoices;
-    $('#pdfTimelineRow').hidden = !showChoices;
+    $('#pdfToggles').hidden = !showChoices;
     updatePdfButtons();
   }
   function ticked() {
@@ -1168,9 +1170,9 @@
   function openPdf() {
     flush();
     const secs = withData();
-    $('#pdfPresets').replaceChildren(
-      ...PRESETS.map((p) => h('button', { type: 'button', class: 'preset', role: 'radio', 'aria-checked': 'false', 'data-preset': p.id, text: p.label, onclick: () => choosePreset(p.id) }))
-    );
+    const presetBtn = (p) => h('button', { type: 'button', class: 'preset', role: 'radio', 'aria-checked': 'false', 'data-preset': p.id, text: p.label, onclick: () => choosePreset(p.id) });
+    $('#pdfPresets').replaceChildren(...PRESETS.filter((p) => !p.row).map(presetBtn));
+    $('#pdfSpecial').replaceChildren(...PRESETS.filter((p) => p.row === 'special').map(presetBtn));
     $('#pdfChoices').replaceChildren(
       ...secs.map((s) => {
         const id = 'pdf-' + s.id;
@@ -1180,23 +1182,25 @@
       })
     );
     $('#pdfEmpty').hidden = !!secs.length;
-    $('#pdfTimeline').checked = getMeta().pdfTimeline !== false; // on unless turned off before
-    choosePreset(getMeta().pdfPreset || 'everything');
+    setSwitch($('#pdfTimeline'), getMeta().pdfTimeline !== false); // on unless turned off before
+    choosePreset(getMeta().pdfPreset || 'custom');
     dlg.showModal();
   }
   document.querySelectorAll('.pdf-open').forEach((b) => b.addEventListener('click', openPdf));
   $('#pdfSelectAll').addEventListener('click', () => {
-    const cbs = [...document.querySelectorAll('#pdfChoices input')];
-    const all = cbs.every((c) => c.checked);
-    cbs.forEach((c) => (c.checked = !all));
+    const on = !switchOn($('#pdfSelectAll'));
+    boxes().forEach((c) => (c.checked = on));
     ticked();
   });
-
-  $('#pdfTimeline').addEventListener('change', (e) => setMeta({ pdfTimeline: e.target.checked }));
+  $('#pdfTimeline').addEventListener('click', () => {
+    const on = !switchOn($('#pdfTimeline'));
+    setSwitch($('#pdfTimeline'), on);
+    setMeta({ pdfTimeline: on });
+  });
 
   // The chosen preset's PDF; save: false returns it without downloading (for the preview)
   function makePdf(save) {
-    const o = { save, timeline: $('#pdfTimeline').checked };
+    const o = { save, timeline: switchOn($('#pdfTimeline')) };
     if (preset === 'emergency') return PHP.buildEmergencyPdf(state, o);
     if (preset === 'wallet') return PHP.buildWalletPdf(state, o);
     return PHP.buildPdf(state, selectedIds(), o);
@@ -1226,7 +1230,7 @@
   const preview = $('#previewDialog');
   let previewRun = 0;
   async function openPreview() {
-    if (!isSpecial() && !selectedIds().length) return;
+    if (!isFixed() && !selectedIds().length) return;
     const run = ++previewRun;
     const pages = $('#previewPages');
     const status = $('#previewStatus');
@@ -1269,7 +1273,7 @@
   });
 
   $('#pdfGo').addEventListener('click', () => {
-    if (!isSpecial() && !selectedIds().length) return;
+    if (!isFixed() && !selectedIds().length) return;
     try {
       makePdf(true);
       dlg.close();

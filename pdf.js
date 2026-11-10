@@ -234,11 +234,22 @@
       y = doc.lastAutoTable.finalY + 6;
     }
 
+    // The timeline goes second, right after Basic Information: its landscape page(s), then a fresh portrait page
+    let timelinePending = !!opts.timeline;
+    const placeTimeline = () => {
+      timelinePending = false;
+      if (drawTimeline(doc, state, ids)) {
+        doc.addPage('letter', 'portrait');
+        y = M;
+      }
+    };
+
     /* Sections */
     for (const sec of PHP.SECTIONS) {
       if (!ids.includes(sec.id)) continue;
       const d = state.data[sec.id];
       if (!PHP.sectionHasData(sec, d)) continue;
+      if (timelinePending && sec.id !== 'basic') placeTimeline();
       const L = sec.list;
       const rows = L ? ((d.lists || {})[L.key] || []).filter((e) => PHP.entryHasData(L, e)) : [];
 
@@ -270,7 +281,11 @@
       y += 28; // space between sections
     }
 
-    if (opts.timeline) drawTimeline(doc, state, ids);
+    // Only Basic Information (or nothing) was printed: the timeline simply follows it
+    if (timelinePending) {
+      timelinePending = false;
+      drawTimeline(doc, state, ids);
+    }
 
     footer(['Personal Health Profile', name].filter(Boolean).join('  ·  '), M);
     if (opts.save !== false) doc.save(fileName('Health-Profile', name));
@@ -324,9 +339,10 @@
     return { groups: groups.filter((g) => g.items.length), undated: undated.filter((u) => PHP.isFilled(u || '')) };
   };
 
+  // Returns true when it added a page (false when nothing in the chosen sections has a date)
   function drawTimeline(doc, state, ids) {
     const { groups, undated } = PHP.timelineData(state, ids);
-    if (!groups.length) return;
+    if (!groups.length) return false;
     const today = Date.now();
     const first = Math.min(...groups.flatMap((g) => g.items.map((i) => i.start)));
 
@@ -465,6 +481,7 @@
       if (y + lines.length * 9 > BOTTOM) newPage(true, M + 4 + HEADER);
       doc.text(lines, M, y + 6);
     }
+    return true;
   }
 
   /* ---------- One-page emergency summary ---------- */

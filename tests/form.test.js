@@ -303,13 +303,21 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const without = PHP.buildPdf(PHP._debug.state, all, { save: false }).getNumberOfPages();
     const doc = PHP.buildPdf(PHP._debug.state, all, { save: false, timeline: true });
     const n = doc.getNumberOfPages();
-    doc.setPage(n);
-    const landscape = doc.internal.pageSize.getWidth() > doc.internal.pageSize.getHeight();
+    // Page 2 (right after Basic Information) is the landscape timeline; every other page is portrait
+    const shapes = [];
+    for (let i = 1; i <= n; i++) {
+      doc.setPage(i);
+      shapes.push(doc.internal.pageSize.getWidth() > doc.internal.pageSize.getHeight() ? 'L' : 'P');
+    }
+    const landscape = shapes[1] === 'L' && shapes.filter((x) => x === 'L').length === 1;
+    const page2 = doc.internal.pages[2].join('\n');
+    const afterBasic = page2.includes('(Health Timeline)') && doc.internal.pages[1].join('\n').includes('(Basic Information)');
     const data = PHP.timelineData(PHP._debug.state, all);
     const noMeds = PHP.timelineData(PHP._debug.state, all.filter((id) => id !== 'meds'));
     return {
       added: n - without,
       landscape,
+      afterBasic,
       groups: data.groups.map((g) => `${g.title}:${g.items.length}`),
       undated: data.undated,
       noMeds: noMeds.groups.map((g) => g.title),
@@ -317,7 +325,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     };
   });
   fs.writeFileSync(OUT + '/timeline.pdf', Buffer.from(tl.b64, 'base64'));
-  ok(tl.added === 1 && tl.landscape, 'timeline adds one landscape page');
+  ok(tl.landscape && tl.afterBasic, 'timeline is the landscape page right after Basic Information');
+  ok(tl.added >= 1 && tl.added <= 2, 'timeline adds its page (and a fresh page for the sections after it): ' + tl.added);
   ok(tl.groups.join() === 'Conditions:4,Medications:5,Surgeries & Procedures:2', 'timeline rows: ' + tl.groups.join(', '));
   ok(tl.undated.join() === 'Acetaminophen', 'items without a start date are listed, not drawn: ' + tl.undated.join(', '));
   ok(!tl.noMeds.includes('Medications'), 'timeline follows the chosen sections');
