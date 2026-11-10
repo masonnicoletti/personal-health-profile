@@ -10,6 +10,9 @@
     border: [214, 222, 232],
     head: [241, 245, 248],
     severe: [150, 40, 40],
+    bar: [18, 48, 90], // deep blue, same as the app's menu bar
+    onBar: [243, 245, 248],
+    onBarSub: [184, 199, 220],
   };
 
   function ageStr(dob) {
@@ -49,12 +52,15 @@
       doc.setTextColor(...color);
     };
 
-    /* Header */
-    font('bold', 19, C.text);
-    doc.text('Personal Health Profile', M, y + 14);
-    font('normal', 9, C.sub);
-    doc.text('Updated ' + PHP.fmtDate(PHP.todayISO()), W - M, y + 14, { align: 'right' });
-    y += 36;
+    /* Header: deep blue band across the top of the first page */
+    const BAND = 64;
+    doc.setFillColor(...C.bar);
+    doc.rect(0, 0, W, BAND, 'F');
+    font('bold', 19, C.onBar);
+    doc.text('Personal Health Profile', M, BAND / 2 + 7);
+    font('normal', 9, C.onBarSub);
+    doc.text('Updated ' + PHP.fmtDate(PHP.todayISO()), W - M, BAND / 2 + 4, { align: 'right' });
+    y = BAND + 30;
     if (name || PHP.isFilled(basic.dob)) {
       let x = M;
       if (name) {
@@ -66,12 +72,8 @@
         font('normal', 11, C.sub);
         doc.text('Born ' + PHP.fmtDate(basic.dob) + ageStr(basic.dob), x, y);
       }
-      y += 10;
-    }
-    doc.setDrawColor(...C.accent);
-    doc.setLineWidth(1.5);
-    doc.line(M, y, W - M, y);
-    y += 24;
+      y += 34;
+    } else y += 6;
 
     const base = {
       margin: { left: M, right: M, top: M, bottom: H - BOTTOM },
@@ -79,9 +81,9 @@
       rowPageBreak: 'avoid',
       styles: {
         font: 'helvetica',
-        fontSize: 9.5,
+        fontSize: 8.5,
         textColor: C.text,
-        cellPadding: { top: 4.5, bottom: 4.5, left: 6, right: 6 },
+        cellPadding: { top: 4, bottom: 4, left: 6, right: 6 },
         overflow: 'linebreak',
         valign: 'top',
       },
@@ -93,15 +95,15 @@
       font('bold', 12.5, C.text);
       doc.text(title, M, y);
       y += 7;
-      doc.setDrawColor(...C.border);
-      doc.setLineWidth(0.75);
+      doc.setDrawColor(...C.accent); // the blue bar under every heading
+      doc.setLineWidth(1.5);
       doc.line(M, y, W - M, y);
-      y += 6;
+      y += 7;
     }
     function subheading(title) {
       ensure(100);
       y += 8;
-      font('bold', 9.5, C.text);
+      font('bold', 9, C.text);
       doc.text(title, M + 6, y + 6);
       y += 12;
     }
@@ -112,7 +114,7 @@
         .filter((c) => c.filled(values))
         .map((c) => ({ c, v: c.text(values) }));
       if (!pairs.length) return;
-      const lab = (t) => ({ content: t, styles: { textColor: C.sub, fontSize: 8.5 } });
+      const lab = (t) => ({ content: t, styles: { textColor: C.sub, fontSize: 7.5 } });
       const body = [];
       let row = null;
       for (const p of pairs) {
@@ -149,12 +151,11 @@
         head: [cols.map((c) => c.label)],
         body: rows.map((e) => cols.map((c) => c.text(e))),
         columnStyles,
-        headStyles: { fontStyle: 'bold', fontSize: 8, textColor: C.sub, fillColor: C.head },
+        headStyles: { fontStyle: 'bold', fontSize: 7.5, textColor: C.sub, fillColor: C.head },
         bodyStyles: { lineColor: C.border, lineWidth: { bottom: 0.5 } },
         didParseCell: (data) => {
           if (data.section !== 'body') return;
           const c = cols[data.column.index];
-          if (data.column.index === 0 && c.type !== 'date') data.cell.styles.fontStyle = 'bold';
           if (c.k === 'severity' && data.cell.raw === 'Severe') {
             data.cell.styles.fontStyle = 'bold';
             data.cell.styles.textColor = C.severe;
@@ -174,7 +175,7 @@
       if (sec.kind === 'profile') {
         profileTable(sec, d.values || {});
       } else if (sec.list.noneLabel && d.none) {
-        font('normal', 10, C.text);
+        font('normal', 8.5, C.text);
         doc.text(sec.list.noneLabel, M + 6, y + 12);
         y += 20;
       } else {
@@ -192,7 +193,7 @@
           listTable(L, L.choices ? PHP.choiceOrder(L, rows) : PHP.sortEntries(L, rows));
         }
       }
-      y += 18;
+      y += 28; // space between sections
     }
 
     /* Footer on every page */
