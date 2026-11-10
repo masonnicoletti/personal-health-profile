@@ -83,6 +83,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const phone = await page.$('#sec-basic input[type=tel]');
   await phone.type('4345550142');
   ok((await phone.evaluate((i) => i.value)) === '(434) 555-0142', 'phone formatted');
+
+  // Spaces at either end are removed when leaving a box; spaces between words stay
+  const preferred = await page.evaluateHandle(() => [...document.querySelectorAll('#sec-basic .f')].find((f) => (f.querySelector('label') || {}).textContent === 'Preferred name').querySelector('input'));
+  await preferred.type('  Mary Ann  ');
+  ok((await S()).data.basic.values.preferred === '  Mary Ann  ', 'typing is left alone while in the box');
+  await page.keyboard.press('Tab');
+  ok((await S()).data.basic.values.preferred === 'Mary Ann' && (await preferred.evaluate((i) => i.value)) === 'Mary Ann', 'leaving the box trims the ends, not the middle');
   const sels = await page.$$('#sec-basic select');
   await sels[sels.length - 1].select('Other');
   await page.keyboard.type('Ontario');
@@ -299,7 +306,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.evaluate(() => localStorage.setItem('php.profile.v1', JSON.stringify({
     v: 2,
     data: {
-      basic: { values: { first: 'Ann', lang: 'English' } },
+      basic: { values: { first: '  Ann ', lang: 'English' } },
       conditions: { lists: { main: [{ id: 'c1', name: 'Diabetes', by: 'Dr. Lee' }, { id: 'c2', name: 'Gout' }] } },
       dxhistory: { lists: { main: [{ id: 'c3', name: 'Shingles', resolved: '2019--' }] } },
       meds: { lists: { main: [{ id: 'm1', name: 'Aspirin', purpose: 'Heart', current: true }, { id: 'm2', name: 'Lasix', dose: '40 mg', freq: 'once daily' }, { id: 'm3', name: 'Insulin', dose: '10 units at night', freq: 'Twice daily with meals' }] } },
@@ -326,6 +333,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(m.providers.lists.main[0].prefix === 'Dr.' && m.providers.lists.main[0].name === 'Lee', 'a title in a provider name becomes the prefix');
   const [, sam, jo] = m.providers.lists.main;
   ok(sam.name === 'Sam Rivera' && sam.credentials === 'PA-C' && jo.name === 'Jo Park' && jo.credentials === 'MD', 'credentials typed after a name move to their own box');
+  ok(m.basic.values.first === 'Ann', 'spaces already saved at either end are cleaned up');
   const fmig = m.family.lists.main;
   ok(fmig.length === 2 && fmig[0].rel === 'Mother' && fmig[0].conditions.map((c) => c.name).join() === 'Diabetes,Glaucoma' && fmig[1].rel === 'Other' && fmig[1].relOther === 'Great-uncle', 'family entries grouped by relative: ' + JSON.stringify(fmig.map((e) => [e.rel, (e.conditions || []).length])));
   ok(m.providers.lists.main[0].street === '9 Elm St' && m.providers.lists.main[0].zip === '23220' && !('address' in m.providers.lists.main[0]), 'provider address split');

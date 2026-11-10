@@ -139,6 +139,17 @@
   // Which collapsible groups (e.g. Lifestyle's Sleep, Activity…) are open; on screen only, not saved
   const openGroups = new Set();
 
+  // Removes spaces at either end of a text box once the person moves on from it.
+  // (Trimming while typing would swallow the space between words.)
+  function trimOnLeave(el, store) {
+    el.addEventListener('change', () => {
+      const t = el.value.trim();
+      if (t === el.value) return;
+      el.value = t;
+      store(t);
+    });
+  }
+
   function fieldGrid(fields, obj, changed, autofill) {
     const grid = h('div', { class: 'grid' });
     const els = [];
@@ -380,10 +391,12 @@
       if (opts.includes('Other')) {
         other = h('input', { type: 'text', class: 'other-input', placeholder: 'Please specify', 'aria-label': f.label + ', other' });
         other.value = obj[f.k + 'Other'] || '';
-        other.addEventListener('input', () => {
-          obj[f.k + 'Other'] = other.value;
+        const storeOther = (v) => {
+          obj[f.k + 'Other'] = v;
           changed();
-        });
+        };
+        other.addEventListener('input', () => storeOther(other.value));
+        trimOnLeave(other, storeOther);
       }
     } else if (f.type === 'phone') {
       input = h('input', { type: 'tel', id, inputmode: 'tel', placeholder: '(555) 555-5555', autocomplete: 'off' });
@@ -419,6 +432,7 @@
       wrap.setVal = (v) => (input.value = PHP.fmtPhone(v));
     } else {
       input.addEventListener('input', () => set(input.value));
+      trimOnLeave(input, set);
       wrap.setVal = (v) => (input.value = v);
     }
     wrap.append(input);
@@ -472,10 +486,12 @@
         if (cb.checked) note.focus();
         changed();
       });
-      note.addEventListener('input', () => {
-        obj[it.k + 'Note'] = note.value;
+      const storeNote = (v) => {
+        obj[it.k + 'Note'] = v;
         changed();
-      });
+      };
+      note.addEventListener('input', () => storeNote(note.value));
+      trimOnLeave(note, storeNote);
       box.append(h('div', { class: 'cl-item' }, h('label', { class: 'check', for: cid }, cb, it.label), note));
     }
     wrap.append(box);

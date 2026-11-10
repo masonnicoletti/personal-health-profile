@@ -1220,6 +1220,16 @@
       put('dental', { dental: sv.dental, dentures: sv.dentures === 'No' ? 'None' : sv.dentures });
       delete d.senses;
     }
+
+    // Spaces at either end of anything typed are removed (the form also trims as you leave each box)
+    const trimAll = (x) => {
+      if (!x || typeof x !== 'object') return;
+      for (const k of Object.keys(x)) {
+        if (typeof x[k] === 'string') x[k] = x[k].trim();
+        else trimAll(x[k]);
+      }
+    };
+    trimAll(d);
     return d;
   };
 })();
