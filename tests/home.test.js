@@ -167,8 +167,11 @@ const clickText = (p, sel, text) =>
   await page.screenshot({ path: OUT + '/home-10-preview.png' });
   await page.click('#previewBack');
   ok(await page.$eval('#pdfDialog', (d) => d.open), 'Back returns to the section choices');
-  // Fewer sections means fewer pages
-  await page.evaluate(() => document.querySelectorAll('#pdfChoices input').forEach((c) => (c.checked = c.value === 'meds')));
+  // Fewer sections means fewer pages (timeline off here; it is tested on its own below)
+  await page.evaluate(() => {
+    document.querySelectorAll('#pdfChoices input').forEach((c) => (c.checked = c.value === 'meds'));
+    document.querySelector('#pdfTimeline').checked = false;
+  });
   await page.click('#pdfPreview');
   await page.waitForFunction(() => /^1 page$/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
   ok((await page.$$('#previewPages canvas')).length === 1, 'preview follows the chosen sections');
@@ -192,6 +195,19 @@ const clickText = (p, sel, text) =>
   await clickText(page, '#formView .pdf-open', 'Save PDF');
   const reopened = await page.evaluate(() => ({ preset: document.querySelector('#pdfPresets [aria-checked="true"]').textContent, insurance: document.querySelector('#pdf-insurance').checked, meds: document.querySelector('#pdf-meds').checked }));
   ok(reopened.preset === 'Choose sections' && !reopened.insurance && reopened.meds, 'last choice and custom selection are remembered');
+  // Timeline checkbox: on by default, remembered when turned off, and adds a page to the preview
+  ok(await page.$eval('#pdfTimeline', (c) => c.checked), 'timeline page is on by default');
+  await page.click('#pdfPreview');
+  await page.waitForFunction(() => /pages?$|could not/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
+  const withTimeline = await page.$$eval('#previewPages canvas', (cs) => cs.map((c) => c.width > c.height));
+  ok(withTimeline[withTimeline.length - 1] === true, 'preview ends with the landscape timeline page');
+  await page.screenshot({ path: OUT + '/home-14-timeline-preview.png' });
+  await page.click('#previewBack');
+  await page.click('#pdfTimeline');
+  await clickText(page, '#pdfDialog button', 'Cancel');
+  await clickText(page, '#formView .pdf-open', 'Save PDF');
+  ok(!(await page.$eval('#pdfTimeline', (c) => c.checked)), 'turning the timeline off is remembered');
+  await page.click('#pdfTimeline');
   // Emergency summary and wallet card: no section boxes, one-page preview
   for (const name of ['Emergency summary', 'Wallet card']) {
     await clickText(page, '#pdfPresets .preset', name);

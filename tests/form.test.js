@@ -297,6 +297,31 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   });
   ok(lifestylePages[0] >= 0 && lifestylePages[0] === lifestylePages[1], 'Lifestyle is not split across pages: ' + lifestylePages.join(' / '));
 
+  // Timeline page: landscape, at the end, built from conditions, medications and procedures
+  const tl = await page.evaluate(() => {
+    const all = PHP.SECTIONS.map((s) => s.id);
+    const without = PHP.buildPdf(PHP._debug.state, all, { save: false }).getNumberOfPages();
+    const doc = PHP.buildPdf(PHP._debug.state, all, { save: false, timeline: true });
+    const n = doc.getNumberOfPages();
+    doc.setPage(n);
+    const landscape = doc.internal.pageSize.getWidth() > doc.internal.pageSize.getHeight();
+    const data = PHP.timelineData(PHP._debug.state, all);
+    const noMeds = PHP.timelineData(PHP._debug.state, all.filter((id) => id !== 'meds'));
+    return {
+      added: n - without,
+      landscape,
+      groups: data.groups.map((g) => `${g.title}:${g.items.length}`),
+      undated: data.undated,
+      noMeds: noMeds.groups.map((g) => g.title),
+      b64: doc.output('datauristring').split(',')[1],
+    };
+  });
+  fs.writeFileSync(OUT + '/timeline.pdf', Buffer.from(tl.b64, 'base64'));
+  ok(tl.added === 1 && tl.landscape, 'timeline adds one landscape page');
+  ok(tl.groups.join() === 'Conditions:4,Medications:5,Surgeries & Procedures:2', 'timeline rows: ' + tl.groups.join(', '));
+  ok(tl.undated.join() === 'Acetaminophen', 'items without a start date are listed, not drawn: ' + tl.undated.join(', '));
+  ok(!tl.noMeds.includes('Medications'), 'timeline follows the chosen sections');
+
   // Emergency summary and wallet card fit on one page each
   for (const [fn, file] of [['buildEmergencyPdf', 'emergency.pdf'], ['buildWalletPdf', 'wallet.pdf']]) {
     const out = await page.evaluate((fn) => { const d = PHP[fn](PHP._debug.state, { save: false }); return { pages: d.getNumberOfPages(), b64: d.output('datauristring').split(',')[1] }; }, fn);

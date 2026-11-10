@@ -1156,6 +1156,7 @@
     const showChoices = !p.special && withData().length > 0;
     $('#pdfChoices').hidden = !showChoices;
     $('#pdfSelectAll').hidden = !showChoices;
+    $('#pdfTimelineRow').hidden = !showChoices;
     updatePdfButtons();
   }
   function ticked() {
@@ -1179,6 +1180,7 @@
       })
     );
     $('#pdfEmpty').hidden = !!secs.length;
+    $('#pdfTimeline').checked = getMeta().pdfTimeline !== false; // on unless turned off before
     choosePreset(getMeta().pdfPreset || 'everything');
     dlg.showModal();
   }
@@ -1190,9 +1192,11 @@
     ticked();
   });
 
+  $('#pdfTimeline').addEventListener('change', (e) => setMeta({ pdfTimeline: e.target.checked }));
+
   // The chosen preset's PDF; save: false returns it without downloading (for the preview)
   function makePdf(save) {
-    const o = { save };
+    const o = { save, timeline: $('#pdfTimeline').checked };
     if (preset === 'emergency') return PHP.buildEmergencyPdf(state, o);
     if (preset === 'wallet') return PHP.buildWalletPdf(state, o);
     return PHP.buildPdf(state, selectedIds(), o);
