@@ -234,14 +234,20 @@
       y = doc.lastAutoTable.finalY + 6;
     }
 
-    // The timeline goes second, right after Basic Information: its landscape page(s), then a fresh portrait page
+    // The timeline goes second, right after Personal Information, in the normal page flow
     let timelinePending = !!opts.timeline;
     const placeTimeline = () => {
       timelinePending = false;
-      if (drawTimeline(doc, state, ids)) {
+      const data = PHP.timelineData(state, ids);
+      if (!data.groups.length) return;
+      // Keep a short timeline in one piece: if it would split here but fits on a page, start a new page
+      const need = 14 + PHP.timelineHeight(data);
+      if (y + need > BOTTOM && M + need <= BOTTOM) {
         doc.addPage('letter', 'portrait');
         y = M;
       }
+      heading('Health Timeline');
+      y = drawTimeline(doc, data, { y, M, W, BOTTOM }) + 28;
     };
 
     /* Sections */
@@ -281,18 +287,15 @@
       y += 28; // space between sections
     }
 
-    // Only Basic Information (or nothing) was printed: the timeline simply follows it
-    if (timelinePending) {
-      timelinePending = false;
-      drawTimeline(doc, state, ids);
-    }
+    // Only Personal Information (or nothing) was printed: the timeline simply follows it
+    if (timelinePending) placeTimeline();
 
     footer(['Personal Health Profile', name].filter(Boolean).join('  ·  '), M);
     if (opts.save !== false) doc.save(fileName('Health-Profile', name));
     return doc;
   };
 
-  /* ---------- Timeline page ---------- */
+  /* ---------- Timeline ---------- */
   // Partial dates are placed at the start of the period they name: "2008" is Jan 1, 2008
   const toTime = (v) => {
     const { y, m, d } = PHP.parseDate(v);
@@ -339,10 +342,17 @@
     return { groups: groups.filter((g) => g.items.length), undated: undated.filter((u) => PHP.isFilled(u || '')) };
   };
 
-  // Returns true when it added a page (false when nothing in the chosen sections has a date)
-  function drawTimeline(doc, state, ids) {
-    const { groups, undated } = PHP.timelineData(state, ids);
-    if (!groups.length) return false;
+  // Sizes shared by the layout and the drawing
+  const TL = { ROW: 14, GROUP_GAP: 6, KEY: 18, AXIS: 14, LABEL_W: 140 };
+  // Height of the whole timeline below its heading, so a short one can be kept on a single page
+  PHP.timelineHeight = (data) =>
+    TL.KEY + TL.AXIS + data.groups.reduce((h, g) => h + TL.ROW * (g.items.length + 1) + TL.GROUP_GAP, 0) + 10 + (data.undated.length ? 16 : 0);
+
+  // Draws the timeline in the normal page flow, starting at ctx.y on the current page.
+  // Continues onto new pages when needed (repeating the year axis) and returns the y where it ends.
+  function drawTimeline(doc, data, ctx) {
+    const { groups, undated } = data;
+    const { M, W, BOTTOM } = ctx;
     const today = Date.now();
     const first = Math.min(...groups.flatMap((g) => g.items.map((i) => i.start)));
 
@@ -354,95 +364,15 @@
     const startYear = Math.floor(y0 / step) * step;
     const t0 = new Date(startYear, 0, 1).getTime();
     const t1 = new Date(y1, 0, 1).getTime();
+    const X0 = M + TL.LABEL_W + 10;
+    const X1 = W - M - 8;
+    const xOf = (t) => X0 + ((t - t0) / (t1 - t0)) * (X1 - X0);
 
     const font = (style, size, color) => {
       doc.setFont('helvetica', style);
       doc.setFontSize(size);
       doc.setTextColor(...color);
     };
-    const M = 40;
-    const LABEL_W = 170;
-    const ROW = 14;
-    let W, H, X0, X1, BOTTOM, y;
-    const xOf = (t) => X0 + ((t - t0) / (t1 - t0)) * (X1 - X0);
-
-    // Heading, key and year axis; repeated on every timeline page. Gridlines stop at endY, just below the last row.
-    function newPage(continued, endY) {
-      doc.addPage('letter', 'landscape');
-      W = doc.internal.pageSize.getWidth();
-      H = doc.internal.pageSize.getHeight();
-      X0 = M + LABEL_W + 12;
-      X1 = W - M - 8;
-      BOTTOM = H - 52;
-      y = M + 4;
-      font('bold', 14, C.text);
-      doc.text(continued ? 'Health Timeline (continued)' : 'Health Timeline', M, y);
-      y += 7;
-      doc.setDrawColor(...C.accent);
-      doc.setLineWidth(1.5);
-      doc.line(M, y, W - M, y);
-      y += 16;
-
-      // Key
-      let kx = M;
-      font('normal', 7.5, C.sub);
-      const key = (draw, text) => {
-        draw(kx, y - 3);
-        doc.text(text, kx + 26, y);
-        kx += 26 + doc.getTextWidth(text) + 18;
-      };
-      key((x, cy) => (doc.setFillColor(...C.accent), doc.roundedRect(x, cy - 3, 20, 6, 3, 3, 'F')), 'Ongoing');
-      key((x, cy) => (doc.setFillColor(...tint(C.accent)), doc.roundedRect(x, cy - 3, 20, 6, 3, 3, 'F')), 'Ended');
-      key((x, cy) => (doc.setFillColor(...PROCEDURE), doc.circle(x + 10, cy, 3, 'F')), 'Single date');
-      y += 18;
-
-      // Axis: year labels, light gridlines down to the last row, and today
-      const axisY = y;
-      font('normal', 7.5, C.sub);
-      for (let yr = startYear; yr <= y1; yr += step) {
-        const x = xOf(new Date(yr, 0, 1).getTime());
-        doc.text(String(yr), x, axisY, { align: 'center' });
-        doc.setDrawColor(...C.border);
-        doc.setLineWidth(0.4);
-        doc.line(x, axisY + 4, x, endY);
-      }
-      const tx = xOf(today);
-      doc.setDrawColor(...C.accent);
-      doc.setLineWidth(0.8);
-      doc.setLineDashPattern([2, 2], 0);
-      doc.line(tx, axisY + 4, tx, endY);
-      doc.setLineDashPattern([], 0);
-      font('bold', 7, C.accent);
-      doc.text('Today', tx, endY + 9, { align: 'center' });
-      y = axisY + 14;
-    }
-    // Where rows land never depends on what is drawn, so lay out each page first to know where it ends
-    const HEADER = 55; // heading (7 + 16), key (18) and axis (14) above the first row, as drawn by newPage
-    const pageH = 612;
-    const pageBottom = pageH - 52;
-    function layout() {
-      const pages = [[]];
-      let ly = M + 4 + HEADER;
-      const room = (h) => {
-        if (ly + h > pageBottom) {
-          pages.push([]);
-          ly = M + 4 + HEADER;
-        }
-      };
-      for (const g of groups) {
-        room(ROW * 2);
-        pages[pages.length - 1].push({ group: g, y: ly });
-        ly += ROW;
-        for (const it of g.items) {
-          room(ROW);
-          pages[pages.length - 1].push({ group: g, item: it, y: ly });
-          ly += ROW;
-        }
-        ly += 6;
-      }
-      return pages.map((rows) => ({ rows, endY: rows[rows.length - 1].y + 8 }));
-    }
-
     const fit = (text, width) => {
       if (doc.getTextWidth(text) <= width) return text;
       let t = text;
@@ -450,18 +380,73 @@
       return t.trimEnd() + '…';
     };
 
-    const pages = layout();
-    pages.forEach((pg, i) => {
-      newPage(i > 0, pg.endY);
-      for (const r of pg.rows) {
+    // Lay out first: which rows land on which page, so gridlines can stop just below each page's last row
+    const chunks = [{ top: ctx.y + TL.KEY, rows: [] }];
+    let ly = ctx.y + TL.KEY + TL.AXIS;
+    const room = (h) => {
+      if (ly + h > BOTTOM) {
+        chunks.push({ top: M, rows: [] });
+        ly = M + TL.AXIS;
+      }
+    };
+    for (const g of groups) {
+      room(TL.ROW * 2);
+      chunks[chunks.length - 1].rows.push({ group: g, y: ly });
+      ly += TL.ROW;
+      for (const it of g.items) {
+        room(TL.ROW);
+        chunks[chunks.length - 1].rows.push({ group: g, item: it, y: ly });
+        ly += TL.ROW;
+      }
+      ly += TL.GROUP_GAP;
+    }
+
+    // Key, once, under the heading
+    let kx = M;
+    const ky = ctx.y + 6;
+    font('normal', 7.5, C.sub);
+    const key = (drawSwatch, text) => {
+      drawSwatch(kx, ky - 3);
+      doc.text(text, kx + 26, ky);
+      kx += 26 + doc.getTextWidth(text) + 18;
+    };
+    key((x, cy) => (doc.setFillColor(...C.accent), doc.roundedRect(x, cy - 3, 20, 6, 3, 3, 'F')), 'Ongoing');
+    key((x, cy) => (doc.setFillColor(...tint(C.accent)), doc.roundedRect(x, cy - 3, 20, 6, 3, 3, 'F')), 'Ended');
+    key((x, cy) => (doc.setFillColor(...PROCEDURE), doc.circle(x + 10, cy, 3, 'F')), 'Single date');
+
+    let endY = ctx.y;
+    chunks.forEach((ch, i) => {
+      if (i > 0) doc.addPage('letter', 'portrait');
+      const axisY = ch.top;
+      const bottom = ch.rows[ch.rows.length - 1].y + 8;
+
+      // Year labels, light gridlines down to the last row, and today
+      font('normal', 7.5, C.sub);
+      for (let yr = startYear; yr <= y1; yr += step) {
+        const x = xOf(new Date(yr, 0, 1).getTime());
+        doc.text(String(yr), x, axisY, { align: 'center' });
+        doc.setDrawColor(...C.border);
+        doc.setLineWidth(0.4);
+        doc.line(x, axisY + 4, x, bottom);
+      }
+      const tx = xOf(today);
+      doc.setDrawColor(...C.accent);
+      doc.setLineWidth(0.8);
+      doc.setLineDashPattern([2, 2], 0);
+      doc.line(tx, axisY + 4, tx, bottom);
+      doc.setLineDashPattern([], 0);
+      font('bold', 7, C.accent);
+      doc.text('Today', tx, bottom + 9, { align: 'center' });
+
+      for (const r of ch.rows) {
         if (!r.item) {
           font('bold', 8.5, C.text);
-          doc.text(r.group.title, M, r.y + 4);
+          doc.text(r.group.title, M + 6, r.y + 4);
           continue;
         }
         const it = r.item;
         font('normal', 8, C.text);
-        doc.text(fit(it.label || '', LABEL_W), M + 8, r.y + 3);
+        doc.text(fit(it.label || '', TL.LABEL_W - 14), M + 14, r.y + 3);
         const xs = xOf(it.start);
         if (it.point) {
           doc.setFillColor(...r.group.color);
@@ -472,16 +457,20 @@
           doc.roundedRect(xs, r.y - 2.5, Math.max(xe - xs, 4), 6, 3, 3, 'F');
         }
       }
-      y = pg.endY + 16;
+      endY = bottom + 12;
     });
 
     if (undated.length) {
       font('normal', 7.5, C.sub);
-      const lines = doc.splitTextToSize('Not shown because no start date was entered: ' + undated.join(', ') + '.', W - M * 2);
-      if (y + lines.length * 9 > BOTTOM) newPage(true, M + 4 + HEADER);
-      doc.text(lines, M, y + 6);
+      const lines = doc.splitTextToSize('Not shown because no start date was entered: ' + undated.join(', ') + '.', W - M * 2 - 6);
+      if (endY + lines.length * 9 > BOTTOM) {
+        doc.addPage('letter', 'portrait');
+        endY = M;
+      }
+      doc.text(lines, M + 6, endY + 6);
+      endY += lines.length * 9 + 4;
     }
-    return true;
+    return endY;
   }
 
   /* ---------- One-page emergency summary ---------- */

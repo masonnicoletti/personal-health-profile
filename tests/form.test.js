@@ -210,7 +210,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await wait(100);
   ok((await S()).data.family.lists.main[0].conditions.map((c) => c.name).join() === 'Stroke,Gout', 'Undo brings the condition back');
 
-  // Reproductive Health follows the sex chosen in Basic Information
+  // Reproductive Health follows the sex chosen in Personal Information
   await page.evaluate(() => [...document.querySelectorAll('.add-opt')].find((b) => b.querySelector('b').textContent === 'Reproductive Health').click());
   const rp = await labels('#sec-reproductive');
   ok(['Number of pregnancies', 'Have you gone through menopause?', 'Last mammogram', 'Last Pap test', 'Last prostate screening (PSA)'].every((l) => rp.includes(l)), 'all questions shown when sex is not Female or Male');
@@ -297,27 +297,27 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   });
   ok(lifestylePages[0] >= 0 && lifestylePages[0] === lifestylePages[1], 'Lifestyle is not split across pages: ' + lifestylePages.join(' / '));
 
-  // Timeline page: landscape, at the end, built from conditions, medications and procedures
+  // Timeline: in the normal page flow, right after Personal Information, built from conditions, medications and procedures
   const tl = await page.evaluate(() => {
     const all = PHP.SECTIONS.map((s) => s.id);
-    const without = PHP.buildPdf(PHP._debug.state, all, { save: false }).getNumberOfPages();
     const doc = PHP.buildPdf(PHP._debug.state, all, { save: false, timeline: true });
     const n = doc.getNumberOfPages();
-    // Page 2 (right after Basic Information) is the landscape timeline; every other page is portrait
-    const shapes = [];
+    let portrait = true;
     for (let i = 1; i <= n; i++) {
       doc.setPage(i);
-      shapes.push(doc.internal.pageSize.getWidth() > doc.internal.pageSize.getHeight() ? 'L' : 'P');
+      if (doc.internal.pageSize.getWidth() > doc.internal.pageSize.getHeight()) portrait = false;
     }
-    const landscape = shapes[1] === 'L' && shapes.filter((x) => x === 'L').length === 1;
-    const page2 = doc.internal.pages[2].join('\n');
-    const afterBasic = page2.includes('(Health Timeline)') && doc.internal.pages[1].join('\n').includes('(Basic Information)');
+    // Section headings in the order they appear across the whole PDF
+    const text = doc.internal.pages.slice(1).map((p) => p.join('\n')).join('\n');
+    const at = (s) => text.indexOf(`(${s})`);
+    const order = at('Personal Information') >= 0 && at('Personal Information') < at('Health Timeline') && at('Health Timeline') < at('Medical History');
+    const samePage = doc.internal.pages[1].join('\n').includes('(Health Timeline)');
     const data = PHP.timelineData(PHP._debug.state, all);
     const noMeds = PHP.timelineData(PHP._debug.state, all.filter((id) => id !== 'meds'));
     return {
-      added: n - without,
-      landscape,
-      afterBasic,
+      portrait,
+      order,
+      samePage,
       groups: data.groups.map((g) => `${g.title}:${g.items.length}`),
       undated: data.undated,
       noMeds: noMeds.groups.map((g) => g.title),
@@ -325,8 +325,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     };
   });
   fs.writeFileSync(OUT + '/timeline.pdf', Buffer.from(tl.b64, 'base64'));
-  ok(tl.landscape && tl.afterBasic, 'timeline is the landscape page right after Basic Information');
-  ok(tl.added >= 1 && tl.added <= 2, 'timeline adds its page (and a fresh page for the sections after it): ' + tl.added);
+  ok(tl.portrait && tl.order, 'timeline sits between Personal Information and Medical History, all pages portrait');
+  ok(tl.samePage, 'timeline shares page 1 with Personal Information');
   ok(tl.groups.join() === 'Conditions:4,Medications:5,Surgeries & Procedures:2', 'timeline rows: ' + tl.groups.join(', '));
   ok(tl.undated.join() === 'Acetaminophen', 'items without a start date are listed, not drawn: ' + tl.undated.join(', '));
   ok(!tl.noMeds.includes('Medications'), 'timeline follows the chosen sections');

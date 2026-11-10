@@ -103,7 +103,7 @@
   const FREQUENCIES = ['Once daily', 'Twice daily', 'Three times daily', 'Four times daily', 'At bedtime', 'Every other day', 'Once weekly', 'Once monthly', 'As needed', 'Other'];
   const UNITS = ['mg', 'mcg', 'g', 'mL', 'units', '%', 'Other'];
   const FORMS = ['Tablet', 'Capsule', 'Liquid', 'Inhaler', 'Injection', 'Patch', 'Cream or ointment', 'Drops', 'Spray', 'Other'];
-  // Reproductive health questions follow the sex chosen in Basic Information (both show when it's blank or Other)
+  // Reproductive health questions follow the sex chosen in Personal Information (both show when it's blank or Other)
   const sexOf = () => {
     const b = PHP.getState().data.basic;
     return (b && b.values && b.values.sex) || '';
@@ -215,7 +215,7 @@
   const SECTIONS = [
     {
       id: 'basic',
-      title: 'Basic Information',
+      title: 'Personal Information',
       kind: 'profile',
       fields: [
         { k: 'first', label: 'First name', type: 'text', w: 'third' },
@@ -727,7 +727,7 @@
       kind: 'profile',
       info: {
         what: 'Pregnancies, menopause and screenings specific to your sex.',
-        why: 'Doctors ask about these on most intake forms, and they affect screening and treatment choices. Questions follow the sex chosen in Basic Information.',
+        why: 'Doctors ask about these on most intake forms, and they affect screening and treatment choices. Questions follow the sex chosen in Personal Information.',
       },
       fields: [
         { type: 'heading', label: 'Pregnancy', showIf: notMale },

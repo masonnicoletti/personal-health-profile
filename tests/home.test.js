@@ -218,12 +218,13 @@ const clickText = (p, sel, text) =>
   const reopened = await page.evaluate(() => ({ preset: document.querySelector('#pdfDialog .preset[aria-checked="true"]').textContent, insurance: document.querySelector('#pdf-insurance').checked, meds: document.querySelector('#pdf-meds').checked }));
   ok(reopened.preset === 'Choose sections' && !reopened.insurance && reopened.meds, 'last choice and custom selection are remembered');
 
-  // Timeline switch: on by default, second in the PDF (landscape), remembered when turned off
+  // Timeline switch: on by default, flows on ordinary portrait pages, remembered when turned off
   ok(await sw('#pdfTimeline'), 'timeline page is on by default');
+  ok((await page.$eval('#sec-basic h2', (x) => x.textContent)) === 'Personal Information', 'first section is titled Personal Information');
   await page.click('#pdfPreview');
   await page.waitForFunction(() => /pages?$|could not/.test(document.querySelector('#previewStatus').textContent), { timeout: 30000 });
   const shapes = await page.$$eval('#previewPages canvas', (cs) => cs.map((c) => (c.width > c.height ? 'L' : 'P')));
-  ok(shapes[0] === 'P' && shapes[1] === 'L' && shapes.slice(2).every((x) => x === 'P'), 'timeline is the second page, after Basic Information: ' + shapes.join(''));
+  ok(shapes.length > 0 && shapes.every((x) => x === 'P'), 'preview with the timeline is all portrait pages: ' + shapes.join(''));
   await page.screenshot({ path: OUT + '/home-14-timeline-preview.png' });
   await page.click('#previewBack');
   await page.click('#pdfTimeline');
