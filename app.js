@@ -655,7 +655,7 @@
     $('#sections').replaceChildren(...active().map(renderSection));
     renderNav();
     renderAdd();
-    renderNotices();
+    renderHome();
   }
 
   // Highlight the section currently in view
@@ -676,34 +676,132 @@
   }
   window.addEventListener('scroll', spy, { passive: true });
 
-  // Backup menu
-  const menuBtn = $('#backupBtn');
-  const menuPanel = $('#backupMenu .menu-panel');
-  function closeMenu() {
-    menuPanel.hidden = true;
-    menuBtn.setAttribute('aria-expanded', 'false');
-  }
-  menuBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const open = menuPanel.hidden;
-    menuPanel.hidden = !open;
-    menuBtn.setAttribute('aria-expanded', String(open));
-    if (open) menuPanel.querySelector('button').focus();
-  });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.info')) closeInfos();
-    if (!e.target.closest('#backupMenu')) closeMenu();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeInfos();
-      if (!menuPanel.hidden) {
-        closeMenu();
-        menuBtn.focus();
-      }
-    }
+    if (e.key === 'Escape') closeInfos();
   });
 
+  /* ---------- Screens: home and form ---------- */
+  function showView(name) {
+    const toForm = name === 'form';
+    $('#homeView').hidden = toForm;
+    $('#formView').hidden = !toForm;
+    if (toForm) spy();
+    else renderHome();
+    window.scrollTo({ top: 0 });
+  }
+  function goForm() {
+    if (location.hash !== '#form') history.pushState({ view: 'form', pushed: true }, '', '#form');
+    showView('form');
+  }
+  function goHome() {
+    flush();
+    if (history.state && history.state.pushed) history.back(); // so the phone's back gesture stays in step
+    else {
+      history.replaceState(null, '', location.pathname + location.search);
+      showView('home');
+    }
+  }
+  window.addEventListener('popstate', () => showView(location.hash === '#form' ? 'form' : 'home'));
+  $('#homeBtn').addEventListener('click', goHome);
+
+  function renderHome() {
+    const has = hasAnyData();
+    const first = String(sd('basic').values.first || '').trim();
+    const sub = $('#homeSub');
+    sub.textContent = has ? (first ? `Welcome back, ${first}.` : 'Welcome back.') : '';
+    sub.hidden = !has;
+    const primary = $('#homePrimary');
+    primary.textContent = has ? 'Update Profile' : 'Get Started';
+    primary.onclick = () => (has ? goForm() : startTour(true));
+    $('#homeSecondary').replaceChildren(
+      ...(has ? [btn('ghost', 'Log Appointment', () => quickAdd('appointments')), btn('ghost', 'Add a Note', () => quickAdd('notes')), btn('ghost', 'Download PDF', openPdf)] : [])
+    );
+    renderNotices();
+  }
+
+  // Jump straight to a new, dated entry in a section (adding the section if needed)
+  function quickAdd(id) {
+    const sec = PHP.sectionById(id);
+    if (sec.optional && !state.added.includes(id)) state.added.push(id);
+    state.open[id] = true;
+    goForm();
+    renderAll();
+    const e = { id: uid(), date: PHP.todayISO() };
+    listArr(id, sec.list.key).push(e);
+    editing.add(e.id);
+    save();
+    rerender(id);
+    document.getElementById('sec-' + id).scrollIntoView({ block: 'start' });
+    focusFirst(e.id);
+  }
+
+  /* ---------- Tutorial and instructions ---------- */
+  const STEPS = [
+    { title: 'Welcome', text: 'Your Personal Health Profile keeps all of your health information in one place.' },
+    { title: 'Fill in what you like', text: 'Go through the form at your own pace. Nothing is required, so skip anything you would rather leave out.' },
+    {
+      title: 'Download a PDF',
+      text: 'When you are ready, tap Download PDF at the top. Choose which sections to include, so you can make different versions to bring to appointments or share with family.',
+    },
+    { title: 'Come back anytime', text: 'Everything saves automatically on this device. Open the app whenever you want to make changes.' },
+  ];
+  const MORE_STEPS = [
+    { title: 'Keep a backup', text: 'In Settings, choose Save a backup to keep a copy of your information somewhere safe.' },
+    { title: 'Add it to your Home Screen', text: 'On iPhone or iPad, tap Share, then Add to Home Screen. On Android, open the browser menu and choose Install app.' },
+  ];
+
+  const tour = $('#tourDialog');
+  let tourStep = 0;
+  let tourThenForm = false;
+  function showStep() {
+    const s = STEPS[tourStep];
+    const last = tourStep === STEPS.length - 1;
+    $('#tourCount').textContent = `${tourStep + 1} of ${STEPS.length}`;
+    $('#tourTitle').textContent = s.title;
+    $('#tourText').textContent = s.text;
+    $('#tourNext').textContent = last ? (tourThenForm ? 'Start' : 'Done') : 'Next';
+  }
+  function startTour(thenForm) {
+    tourStep = 0;
+    tourThenForm = thenForm;
+    showStep();
+    tour.showModal();
+    $('#tourNext').focus();
+  }
+  $('#tourNext').addEventListener('click', () => {
+    if (tourStep < STEPS.length - 1) {
+      tourStep++;
+      showStep();
+      $('#tourNext').focus();
+    } else tour.close();
+  });
+  tour.addEventListener('close', () => {
+    if (!tourThenForm) return;
+    tourThenForm = false;
+    goForm();
+  });
+
+  $('#instrSteps').replaceChildren(...STEPS.concat(MORE_STEPS).map((s) => h('li', {}, h('b', { text: s.title }), h('p', { text: s.text }))));
+  $('#instrBtn').addEventListener('click', () => $('#instrDialog').showModal());
+
+  /* ---------- Pop-up confirmation ---------- */
+  function askConfirm(title, text, okLabel, danger) {
+    const d = $('#confirmDialog');
+    $('#confirmTitle').textContent = title;
+    $('#confirmText').textContent = text;
+    const ok = $('#confirmOk');
+    ok.textContent = okLabel;
+    ok.classList.toggle('danger', !!danger);
+    d.returnValue = '';
+    d.showModal();
+    $('#confirmDialog .btn.ghost').focus(); // Cancel is the safe default
+    return new Promise((resolve) => d.addEventListener('close', () => resolve(d.returnValue === 'ok'), { once: true }));
+  }
+
+  /* ---------- Settings ---------- */
   function download(blob, name) {
     const a = h('a', { href: URL.createObjectURL(blob), download: name });
     document.body.append(a);
@@ -724,8 +822,20 @@
     toast(msg, true);
   }
 
+  const settings = $('#settingsDialog');
+  const dayOf = (ts) => {
+    const t = new Date(ts);
+    return [t.getFullYear(), String(t.getMonth() + 1).padStart(2, '0'), String(t.getDate()).padStart(2, '0')].join('-');
+  };
+  function openSettings() {
+    const m = getMeta();
+    $('#lastBackup').textContent = m.lastBackup ? 'Last saved ' + PHP.fmtDate(dayOf(m.lastBackup)) + '.' : 'Download a copy of your information.';
+    settings.showModal();
+  }
+  document.querySelectorAll('.settings-open').forEach((b) => b.addEventListener('click', openSettings));
+
   function exportBackup() {
-    closeMenu();
+    if (settings.open) settings.close();
     flush();
     const payload = JSON.stringify({ ...state, app: 'Personal Health Profile', exported: new Date().toISOString() }, null, 2);
     download(new Blob([payload], { type: 'application/json' }), `health-profile-backup-${PHP.todayISO()}.json`);
@@ -735,7 +845,7 @@
   }
   $('#exportBtn').addEventListener('click', exportBackup);
   $('#importBtn').addEventListener('click', () => {
-    closeMenu();
+    settings.close();
     $('#importFile').click();
   });
   $('#importFile').addEventListener('change', async (e) => {
@@ -748,20 +858,25 @@
       toast('That file could not be read.');
     }
   });
-  $('#sampleBtn').addEventListener('click', () => {
-    closeMenu();
-    if (hasAnyData() && !confirm('Replace your information with sample data? You can undo this right after.')) return;
+  $('#tourBtn').addEventListener('click', () => {
+    settings.close();
+    startTour(false);
+  });
+  $('#sampleBtn').addEventListener('click', async () => {
+    settings.close();
+    if (hasAnyData() && !(await askConfirm('Replace your information?', 'The sample profile will replace what is here. You can undo this right after.', 'Replace'))) return;
     replaceState(normalize(PHP.sampleData()), 'Sample data loaded.');
   });
-  $('#eraseBtn').addEventListener('click', () => {
-    closeMenu();
-    if (!confirm('Erase all information saved on this device?')) return;
+  $('#eraseBtn').addEventListener('click', async () => {
+    settings.close();
+    if (!(await askConfirm('Are you sure?', 'This deletes all information saved on this device.', 'Erase', true))) return;
     replaceState(blank(), 'Everything erased.');
+    goHome();
   });
 
-  // PDF
+  /* ---------- Download PDF ---------- */
   const dlg = $('#pdfDialog');
-  $('#pdfBtn').addEventListener('click', () => {
+  function openPdf() {
     flush();
     const secs = active().filter((s) => PHP.sectionHasData(s, state.data[s.id]));
     $('#pdfChoices').replaceChildren(
@@ -776,7 +891,8 @@
     $('#pdfGo').disabled = !secs.length;
     $('#pdfSelectAll').hidden = !secs.length;
     dlg.showModal();
-  });
+  }
+  document.querySelectorAll('.pdf-open').forEach((b) => b.addEventListener('click', openPdf));
   $('#pdfSelectAll').addEventListener('click', () => {
     const cbs = [...document.querySelectorAll('#pdfChoices input')];
     const all = cbs.every((c) => c.checked);
@@ -911,6 +1027,7 @@
 
   /* ---------- Start ---------- */
   renderAll();
+  showView(location.hash === '#form' ? 'form' : 'home');
   protectStorage();
   PHP._debug = {
     get state() {

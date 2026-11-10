@@ -16,46 +16,58 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <h1>Personal Health Profile</h1>
-      </div>
-      <div class="actions">
-        <span class="save-status" id="saveStatus" aria-live="polite"></span>
-        <div class="menu" id="backupMenu">
-          <button type="button" class="btn ghost" id="backupBtn" aria-haspopup="true" aria-expanded="false">Backup</button>
-          <div class="menu-panel" role="menu" hidden>
-            <button type="button" role="menuitem" id="exportBtn">Save a backup file</button>
-            <button type="button" role="menuitem" id="importBtn">Restore from backup</button>
-            <button type="button" role="menuitem" id="sampleBtn">Load sample data</button>
-            <button type="button" role="menuitem" class="danger" id="eraseBtn">Erase everything</button>
-          </div>
-        </div>
-        <button type="button" class="btn primary" id="pdfBtn">Download PDF</button>
-      </div>
-    </div>
-  </header>
-
-  <div class="layout">
-    <nav class="sidenav" aria-label="Sections">
-      <ul id="nav"></ul>
-    </nav>
-
-    <main id="main">
+  <!-- Home screen -->
+  <div id="homeView" class="view">
+    <header class="home-top">
+      <button type="button" class="btn ghost" id="instrBtn">Instructions</button>
+      <button type="button" class="btn ghost settings-open">Settings</button>
+    </header>
+    <main class="home">
+      <h1 class="home-title">Personal Health Profile</h1>
+      <p class="home-sub" id="homeSub"></p>
+      <button type="button" class="btn primary big" id="homePrimary"></button>
+      <div class="home-secondary" id="homeSecondary"></div>
       <div id="notices"></div>
-      <div id="sections"></div>
-
-      <section class="add-section card" id="addSection">
-        <h2>Add a section</h2>
-        <div class="add-grid" id="addGrid"></div>
-      </section>
-
-      <p class="privacy">Saved only on this device. Nothing is sent anywhere. Keep a backup file in a safe place.</p>
+      <p class="privacy">Saved only on this device. Nothing is sent anywhere.</p>
     </main>
   </div>
 
-  <dialog id="pdfDialog" aria-labelledby="pdfTitle">
+  <!-- Form -->
+  <div id="formView" class="view" hidden>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <button type="button" class="btn ghost" id="homeBtn">Home</button>
+        <div class="brand">
+          <h1>Personal Health Profile</h1>
+        </div>
+        <div class="actions">
+          <span class="save-status" id="saveStatus" aria-live="polite"></span>
+          <button type="button" class="btn ghost settings-open">Settings</button>
+          <button type="button" class="btn primary pdf-open">Download PDF</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="sidenav" aria-label="Sections">
+        <ul id="nav"></ul>
+      </nav>
+
+      <main id="main">
+        <div id="sections"></div>
+
+        <section class="add-section card" id="addSection">
+          <h2>Add a section</h2>
+          <div class="add-grid" id="addGrid"></div>
+        </section>
+
+        <p class="privacy">Saved only on this device. Nothing is sent anywhere. Keep a backup file in a safe place.</p>
+      </main>
+    </div>
+  </div>
+
+  <!-- Download PDF -->
+  <dialog id="pdfDialog" class="panel" aria-labelledby="pdfTitle">
     <form method="dialog" class="dialog-body">
       <h2 id="pdfTitle">Download PDF</h2>
       <p class="sub">Choose what to include.</p>
@@ -66,6 +78,74 @@
         <span class="spacer"></span>
         <button value="cancel" class="btn ghost">Cancel</button>
         <button type="button" class="btn primary" id="pdfGo">Download</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Settings -->
+  <dialog id="settingsDialog" class="panel" aria-labelledby="settingsTitle">
+    <form method="dialog" class="dialog-body">
+      <div class="panel-head">
+        <h2 id="settingsTitle">Settings</h2>
+        <button value="close" class="btn ghost">Close</button>
+      </div>
+      <div class="settings-list">
+        <button type="button" class="setting" id="exportBtn">
+          <b>Save a backup</b>
+          <span id="lastBackup">Download a copy of your information.</span>
+        </button>
+        <button type="button" class="setting" id="importBtn">
+          <b>Restore from backup</b>
+          <span>Replace what is here with a saved backup file.</span>
+        </button>
+        <button type="button" class="setting" id="tourBtn">
+          <b>Replay the tutorial</b>
+          <span>See the welcome steps again.</span>
+        </button>
+        <button type="button" class="setting" id="sampleBtn">
+          <b>Load sample data</b>
+          <span>Fill in a made-up profile to try the app.</span>
+        </button>
+        <button type="button" class="setting danger" id="eraseBtn">
+          <b>Erase everything</b>
+          <span>Delete all information saved on this device.</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Instructions -->
+  <dialog id="instrDialog" class="panel" aria-labelledby="instrTitle">
+    <form method="dialog" class="dialog-body">
+      <div class="panel-head">
+        <h2 id="instrTitle">Instructions</h2>
+        <button value="close" class="btn ghost">Close</button>
+      </div>
+      <ol class="steps" id="instrSteps"></ol>
+    </form>
+  </dialog>
+
+  <!-- Tutorial and confirmation pop-ups -->
+  <dialog id="tourDialog" class="popup" aria-labelledby="tourTitle">
+    <div class="dialog-body">
+      <p class="step-count" id="tourCount"></p>
+      <h2 id="tourTitle"></h2>
+      <p id="tourText"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn primary" id="tourNext">Next</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="confirmDialog" class="popup" aria-labelledby="confirmTitle">
+    <form method="dialog" class="dialog-body">
+      <h2 id="confirmTitle"></h2>
+      <p id="confirmText"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button value="cancel" class="btn ghost">Cancel</button>
+        <button value="ok" class="btn primary" id="confirmOk"></button>
       </div>
     </form>
   </dialog>

@@ -10,7 +10,7 @@ Everything you enter is saved **only in the browser on your own device**. Nothin
 
 Because of this:
 
-- Your information does not sync between devices. Use **Backup → Save a backup file** to move it or keep a copy.
+- Your information does not sync between devices. Use **Settings → Save a backup** to move it or keep a copy.
 - Clearing your browser data erases it.
 - On iPhone and iPad, add the page to your Home Screen (Share → Add to Home Screen). Safari can erase data from websites you have not opened in 7 days.
 
@@ -41,7 +41,7 @@ Then open http://localhost:8765. To publish it, upload this folder to any static
 | `schema.js` | Every section and field. Edit here to add, remove or rename fields |
 | `app.js` | Form behavior, autosave, backup and restore |
 | `pdf.js` | PDF output |
-| `sample.js` | Fictional sample profile, loaded from Backup → Load sample data |
+| `sample.js` | Fictional sample profile, loaded from Settings → Load sample data |
 | `manifest.webmanifest`, `icons/` | Lets people install it to their Home Screen like an app |
 | `sw.js` | Offline support. Caches only the app's own files, never health information |
 | `vendor/` | [jsPDF](https://github.com/parallax/jsPDF) 2.5.1 and [jsPDF-AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) 3.8.2 (MIT), included so the app works offline |
