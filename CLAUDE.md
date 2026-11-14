@@ -28,15 +28,15 @@ npm run icons                    # regenerate icons/ from the SVG in tools/make-
 - `form.test.js`: sections, fields, checklists, autofill, migration of old saved data, PDF generation. `home.test.js`: home screen, tutorial, Settings, erase confirmation. `offline.test.js`: manifest, service worker, offline use, install tip, backup reminder.
 - Each file prints PASS/FAIL lines and exits non-zero on any failure. Screenshots and a sample PDF are written to `tests/out/` (gitignored) for checking by eye.
 - Tests reach into the page through `PHP._debug.state` (live state) and `PHP.buildPdf(state, ids, { save: false })`. Timing matters: `<dialog>` close events are asynchronous, so wait briefly before asserting what a closed dialog led to.
-- When changing fields or sections, update the matching assertions (labels, section order, migration cases) and `sample.js`.
-- `sample.js` (a fictional, fully filled profile) is not loaded by the app. Tests load it with `useSample(page)` from `tests/env.js`. To see it in a browser, run this in the console: `s=document.createElement('script');s.src='sample.js';s.onload=()=>{localStorage.setItem('php.profile.v1',JSON.stringify(PHP.sampleData()));location.reload()};document.head.append(s)`
+- When changing fields or sections, update the matching assertions (labels, section order, migration cases) and `js/sample.js`.
+- `js/sample.js` (a fictional, fully filled profile) is not loaded by the app. Tests load it with `useSample(page)` from `tests/env.js`. To see it in a browser, run this in the console: `s=document.createElement('script');s.src='js/sample.js';s.onload=()=>{localStorage.setItem('php.profile.v1',JSON.stringify(PHP.sampleData()));location.reload()};document.head.append(s)`
 - A push to `main` is live for testers within minutes. Commit locally, then confirm with the user before pushing.
 
 ## Architecture
 
-Scripts load in order from `index.html` and share one global namespace, `window.PHP`: `vendor/` (jsPDF 2.5.1 + AutoTable 3.8.2, kept local so the app works offline) → `schema.js` → `pdf.js` → `sample.js` → `app.js`.
+Scripts live in `js/` (except `sw.js`, which must stay at the root to control the whole site) and load in order from `index.html`, sharing one global namespace, `window.PHP`: `vendor/` (jsPDF 2.5.1 + AutoTable 3.8.2, kept local so the app works offline) → `schema.js` → `pdf.js` → `core.js` → `fields.js` → `sections.js` → `screens.js` → `pdf-panel.js` → `main.js`. `sample.js` is not loaded by the app.
 
-**`schema.js` is the single source of truth.** `PHP.SECTIONS` declares every section and field. The form (`app.js`) and the PDF (`pdf.js`) are both generated from it, so adding, removing or renaming a field is normally a schema-only change. It also holds the shared data helpers (`fieldFilled`, `fieldText`, `entryHasData`, `sectionHasData`, `outputCols`) and `PHP.migrate`.
+**`js/schema.js` is the single source of truth.** `PHP.SECTIONS` declares every section and field. The form (the app files below) and the PDF (`js/pdf.js`) are both generated from it, so adding, removing or renaming a field is normally a schema-only change. It also holds the shared data helpers (`fieldFilled`, `fieldText`, `entryHasData`, `sectionHasData`, `outputCols`) and `PHP.migrate`.
 
 - **Section kinds:**
   - `profile`: a single record of `fields`.
@@ -63,11 +63,24 @@ Scripts load in order from `index.html` and share one global namespace, `window.
 **Data and storage.** State is `{ v, data: { [sectionId]: { values, lists: { main: [entries] }, none } }, added: [optional section ids], open: {…} }`, saved with a debounced write to `localStorage['php.profile.v1']`. Tips and reminder state (install tip dismissed, last backup, snooze) live separately in `php.meta.v1`, so erasing or restoring a profile doesn't bring them back.
 
 **Every structural change to saved data must keep old data working.**
-- `normalize()` in `app.js` runs `PHP.migrate()` on every load and on backup restore. Migrations must be idempotent, so guard them on the presence of old keys.
+- `normalize()` in `js/core.js` runs `PHP.migrate()` on every load and on backup restore. Migrations must be idempotent, so guard them on the presence of old keys.
 - Never silently drop user text. When a field is removed, the convention is to append its value to the entry's `notes` (e.g. `"Managed by: …"`).
 - Renamed or merged sections also need their `open`/`added` ids mapped in `normalize()`.
 
-**`app.js`**
+**The form app** is split by job. Each file is an IIFE sharing `const A = (PHP.app = PHP.app || {})`:
+- `core.js`: helpers (`h`, `$`, `uid`, `nextId`, `btn`), state, load/save, undo and toast, `getMeta`/`setMeta` for `php.meta.v1`.
+- `fields.js`: one form field of each type, `fieldGrid`, dates, phones, checklists.
+- `sections.js`: sections, list entries, add/remove actions, nav and Additional Sections.
+- `screens.js`: home and form screens, quick actions, tutorial, Settings (backup, restore, erase), Share, notices.
+- `pdf-panel.js`: the Save PDF panel and preview.
+- `main.js`: start-up only.
+
+Rules for working across these files:
+- `state` is reassigned (undo, restore, erase, another tab), so it always lives on `A.state`; never keep a local copy. `PHP.getState()` and `PHP._debug.state` return it.
+- Each file exports what others need (`A.renderAll = …`). Call another file's function as `A.fn()` at call time. Destructuring at load time is only safe for `core.js` exports, because later files have not run yet.
+- Only `main.js` runs start-up code that calls into other files.
+
+Behaviour:
 - Renders two screens, toggled by `location.hash` (`#form`) with `history` entries so the back gesture works:
   - Home: Get Started, which opens the tutorial, or Update Profile plus quick actions.
   - Form.
@@ -75,9 +88,9 @@ Scripts load in order from `index.html` and share one global namespace, `window.
 - Dialogs (Save PDF, preview, Settings, Share, Privacy, Instructions, tutorial, confirm) are native `<dialog>` elements. `.panel` dialogs fill the screen on phones. Close a dialog before showing a toast, because the modal's top layer hides it.
 - Destructive actions call `snapshot()` first, then show an Undo toast.
 
-**PDF preview** (in `app.js`) renders the same jsPDF output to canvases with PDF.js (`vendor/pdfjs/`), injected as a script only on first use. PDF.js is deliberately not in the service worker's `ASSETS`, to avoid a 1.4 MB download for everyone; it's cached once used.
+**PDF preview** (in `js/pdf-panel.js`) renders the same jsPDF output to canvases with PDF.js (`vendor/pdfjs/`), injected as a script only on first use. PDF.js is deliberately not in the service worker's `ASSETS`, to avoid a 1.4 MB download for everyone; it's cached once used.
 
-**`pdf.js`** has three outputs, chosen in the Save PDF panel: Choose sections first, then a Special outputs row (New doctor, Emergency summary, Wallet card), then switches for the timeline and Select all, then the section boxes (`PRESETS` in `app.js`; the last choice, a custom selection and the timeline switch are kept in `php.meta.v1`):
+**`js/pdf.js`** has three outputs, chosen in the Save PDF panel: Choose sections first, then a Special outputs row (New doctor, Emergency summary, Wallet card), then switches for the timeline and Select all, then the section boxes (`PRESETS` in `js/pdf-panel.js`; the last choice, a custom selection and the timeline switch are kept in `php.meta.v1`):
 - `buildPdf`: the full profile or chosen sections. Prints only what is filled in: empty fields, columns, entries and sections are omitted, columns come from `PHP.outputCols` (list `merge` keeps tables narrow), and split lists print separate Current and Past tables. `keepTogether` uses a throwaway probe document to move a section to the next page when a break would strand one or two rows.
 - `buildEmergencyPdf`: one page of allergies, current medications and conditions, key facts and emergency contacts; it retries at smaller type sizes until it fits.
 - `buildWalletPdf`: a 3.5 × 2 in fold-over card drawn on a letter page.

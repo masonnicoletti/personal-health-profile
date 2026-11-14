@@ -1,6 +1,6 @@
 # Plan: split `app.js` into a `js/` folder
 
-Status: planned, not started (written 2026-11-09). Agreed with the project owner; deferred to its own session so behaviour changes and code moves are never mixed.
+Status: done on 2026-11-13. Kept as a record of how the files share code. One extra lesson: the first grep check below skips any line that already contains `A.state`, so it missed `A.state.data[id] || (state.data[id] = {})` in `sd()`; check lines with two `state` references by eye.
 
 ## Goal
 
